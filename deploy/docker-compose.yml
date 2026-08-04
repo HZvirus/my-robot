@@ -1,0 +1,207 @@
+name: my-robot
+
+x-backend-common: &backend-common
+  build:
+    context: ../backend
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &backend-env
+    SERVICE_NAME: ${SERVICE_NAME:-service}
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myrobot}:${POSTGRES_PASSWORD:-myrobot}@postgres:5432/${POSTGRES_DB:-myrobot}
+    REDIS_URL: redis://redis:6379/0
+    EMQX_HOST: emqx
+    EMQX_PORT: "1883"
+    EMQX_WS_PORT: "8083"
+    EMQX_USERNAME: ${EMQX_USERNAME:-myrobot}
+    EMQX_PASSWORD: ${EMQX_PASSWORD:-myrobot}
+    JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-please-32bytes-minimum}
+    JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
+    MODEL_GATEWAY_URL: http://model-gateway:8300
+    RAG_ENGINE_URL: http://rag-engine:8400
+    TASK_EXECUTOR_URL: http://task-executor:8500
+    USER_TENANT_URL: http://user-tenant:8200
+    OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-https://api.deepseek.com/v1}
+    OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [my-robot]
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-myrobot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myrobot}
+      POSTGRES_DB: ${POSTGRES_DB:-myrobot}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myrobot} -d ${POSTGRES_DB:-myrobot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [my-robot]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [my-robot]
+
+  emqx:
+    image: emqx/emqx:5.8
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: my-robot
+      EMQX_HOST: emqx
+      EMQX_LOADED_PLUGINS: "emqx_auth_mnesia"
+    ports:
+      - "1883:1883"      # MQTT
+      - "8083:8083"      # MQTT over WebSocket
+      - "8084:8084"      # MQTT over WSS
+      - "18083:18083"    # 控制台
+    volumes: [emqxdata:/opt/emqx/data]
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [my-robot]
+
+  kong:
+    image: kong:3.8
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_NGINX_PROXY_PROXY_BUFFERING: "off"
+      KONG_NGINX_PROXY_PROXY_REQUEST_BUFFERING: "off"
+    ports:
+      - "${KONG_GATEWAY_PORT:-8000}:8000"
+      - "${KONG_ADMIN_PORT:-8001}:8001"
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [my-robot]
+
+  user-tenant:
+    <<: *backend-common
+    command: ["python", "-m", "user_tenant.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: user-tenant
+      USER_TENANT_PORT: "8200"
+    ports: ["8200:8200"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  model-gateway:
+    <<: *backend-common
+    command: ["python", "-m", "model_gateway.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: model-gateway
+      MODEL_GATEWAY_PORT: "8300"
+    ports: ["8300:8300"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8300/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rag-engine:
+    <<: *backend-common
+    command: ["python", "-m", "rag_engine.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: rag-engine
+      RAG_ENGINE_PORT: "8400"
+    ports: ["8400:8400"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8400/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  task-executor:
+    <<: *backend-common
+    command: ["python", "-m", "task_executor.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: task-executor
+      TASK_EXECUTOR_PORT: "8500"
+    ports: ["8500:8500"]
+    depends_on:
+      redis: { condition: service_healthy }
+      emqx: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  dialog-engine:
+    <<: *backend-common
+    command: ["python", "-m", "dialog_engine.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: dialog-engine
+      DIALOG_ENGINE_PORT: "8100"
+    ports: ["8100:8100"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      model-gateway: { condition: service_healthy }
+      rag-engine: { condition: service_healthy }
+      task-executor: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mock-robot:
+    <<: *backend-common
+    command: ["python", "-m", "mock_robot.main"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: mock-robot
+    depends_on:
+      emqx: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  emqxdata:
+
+networks:
+  my-robot:
+    driver: bridge

@@ -1,0 +1,15 @@
+name: hospital
+display_name: 医院 24 寸智能服务屏
+model_group: hospital_cloud
+rag_mode: force
+rag_collections:
+  - hospital_dept
+  - drug_manual
+  - insurance_policy
+asr_profile: noisy
+safety_policy: escalate
+output_format: structured
+max_tokens: 512
+system_prompt: |
+  你是医院智能服务机器人，服务于医院 24 寸大屏。回答专业、简洁、结构化，
+  涉及科室查询、查房提醒、用药与医保说明。遇到医学判断应提示就医。

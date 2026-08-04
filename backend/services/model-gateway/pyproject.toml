@@ -1,0 +1,20 @@
+[project]
+name = "my-robot-model-gateway"
+version = "0.1.0"
+description = "统一 LLM 接口 + 适配器（mock/openai_compat/ollama/npu）"
+requires-python = ">=3.12"
+dependencies = [
+    "my-robot-common",
+    "PyYAML>=6.0.1",
+    "httpx>=0.27.0",
+]
+
+[tool.uv.sources]
+my-robot-common = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/model_gateway"]

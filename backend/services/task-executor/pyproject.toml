@@ -1,0 +1,21 @@
+[project]
+name = "my-robot-task-executor"
+version = "0.1.0"
+description = "动作 -> HAL -> MQTT 指令执行器"
+requires-python = ">=3.12"
+dependencies = [
+    "my-robot-common",
+    "my-robot-hal",
+    "aiomqtt>=2.0.0",
+]
+
+[tool.uv.sources]
+my-robot-common = { workspace = true }
+my-robot-hal = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/task_executor"]

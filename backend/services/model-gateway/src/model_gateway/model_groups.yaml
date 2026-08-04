@@ -1,0 +1,22 @@
+default_group: skeleton_mock
+
+groups:
+  skeleton_mock:
+    adapter: mock
+    models: ["skeleton-mock"]
+  hospital_cloud:
+    adapter: openai_compat
+    base_url_env: OPENAI_COMPAT_BASE_URL
+    api_key_env: OPENAI_COMPAT_API_KEY
+    models: ["deepseek-chat"]
+  home_edge:
+    adapter: ollama
+    base_url_env: OLLAMA_BASE_URL
+    models: ["qwen2.5-1.5b"]
+  npu_local:
+    adapter: npu
+    models: ["rknn-vlm-local"]
+
+scene_routes:
+  hospital: hospital_cloud
+  home: home_edge

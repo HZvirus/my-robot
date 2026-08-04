@@ -1,0 +1,45 @@
+:root {
+  --color-primary: #1e63d6;
+  --color-primary-dark: #16489c;
+  --color-bg: #f2f6fc;
+  --color-surface: #ffffff;
+  --color-bubble-user: #1e63d6;
+  --color-text: #1a2433;
+  --color-text-muted: #6b7785;
+  --color-action: #0e9f6e;
+  --color-danger: #e5484d;
+  --color-success: #0e9f6e;
+  --font-base: 18px;
+  --font-large: 22px;
+  --font-title: 30px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --layout-max-width: 1600px;
+  --layout-padding: 24px;
+  --bubble-max-width: 70%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
