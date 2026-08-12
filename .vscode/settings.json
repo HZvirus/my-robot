@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.turbo": true,
+    "**/dist": true,
+    "**/__pycache__": true
+  },
+  "python.defaultInterpreterPath": "apps/ai-service/.venv/bin/python"
+}

@@ -1,0 +1,20 @@
+.base-button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+  cursor: pointer;
+}
+.base-button.primary {
+  background: #409eff;
+  color: #fff;
+  border-color: #409eff;
+}
+.spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #409eff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
