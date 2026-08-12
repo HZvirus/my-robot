@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import type {
   CompanionConversation,
   CompanionMessage
@@ -13,13 +13,13 @@ export const useCompanionStore = defineStore('companion', () => {
   const error = ref('')
 
   function makeMessage(role: 'user' | 'assistant', content: string): CompanionMessage {
-    return {
+    return reactive({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role,
       content,
       interrupted: false,
       createdAt: new Date().toISOString()
-    }
+    })
   }
 
   async function send(text: string): Promise<void> {

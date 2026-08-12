@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { BaseButton, LoadingSpinner, TypewriterText } from '@my-robot/ui'
+import { BaseButton, LoadingSpinner } from '@my-robot/ui'
+import TypewriterText from '@/components/TypewriterText.vue'
 import { useCompanionStore } from '@/stores/companion'
 
 const route = useRoute()
