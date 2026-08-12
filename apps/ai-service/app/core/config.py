@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     # --- Companion (health companionship chat, streaming) ---
     COMPANION_MAX_HISTORY: int = 12
 
+    # --- iFlytek TTS (voice read-aloud) ---
+    IFLYTEK_APP_ID: str = ""
+    IFLYTEK_API_KEY: str = ""
+    IFLYTEK_API_SECRET: str = ""
+    IFLYTEK_TTS_URL: str = "wss://tts-api.xfyun.cn/v2/tts"
+    IFLYTEK_TTS_VOICE: str = "xiaoyan"
+    IFLYTEK_TTS_SPEED: int = 50
+    IFLYTEK_TTS_VOLUME: int = 50
+    IFLYTEK_TTS_PITCH: int = 50
+    IFLYTEK_TTS_MAX_BYTES: int = 8000
+
     # --- Triage / RAG (Ollama + ChromaDB) ---
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_LLM_MODEL: str = "qwen2.5:7b"

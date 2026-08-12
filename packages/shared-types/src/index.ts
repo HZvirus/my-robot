@@ -117,3 +117,16 @@ export interface CompanionConversation {
   createdAt: string
   preview: string
 }
+
+export interface TtsStreamRequest {
+  text: string
+  voice?: string
+  speed?: number
+  volume?: number
+  pitch?: number
+}
+
+export interface TtsStreamEvent {
+  audio?: string
+  error?: string
+}

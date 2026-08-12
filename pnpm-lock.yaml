@@ -118,6 +118,12 @@ importers:
 
   packages/ui:
     devDependencies:
+      '@my-robot/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      eslint:
+        specifier: ^8.0.0
+        version: 8.57.1
       typescript:
         specifier: ^5.4.0
         version: 5.9.3

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { BaseButton, LoadingSpinner } from '@my-robot/ui'
+import { BaseButton, LoadingSpinner, SpeechButton } from '@my-robot/ui'
 import TypewriterText from '@/components/TypewriterText.vue'
 import { useCompanionStore } from '@/stores/companion'
 
@@ -130,6 +130,12 @@ watch(
           >
             （已中断）
           </span>
+          <SpeechButton
+            v-if="m.role === 'assistant' && m.content"
+            :id="m.id"
+            :text="m.content"
+            :disabled="store.streaming"
+          />
         </div>
       </div>
 

@@ -1,7 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ChatConversation, ChatMessage } from '@my-robot/shared-types'
+import { useSpeech } from '@my-robot/ui'
 import { streamChat } from '@/api/chat'
+
+const speech = useSpeech()
 
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
@@ -46,6 +49,7 @@ export const useChatStore = defineStore('chat', () => {
             if (assistant.content === '' && !error.value) {
               assistant.interrupted = true
             }
+            maybeAutoSpeak(assistant)
           }
         }
       )
@@ -71,7 +75,14 @@ export const useChatStore = defineStore('chat', () => {
     return (await resp.json()) as ChatConversation[]
   }
 
+  function maybeAutoSpeak(msg: ChatMessage): void {
+    if (!speech.settings.autoRead) return
+    if (!msg.content || msg.interrupted) return
+    void speech.speak(msg.id, msg.content)
+  }
+
   function reset() {
+    speech.stop()
     messages.value = []
     conversationId.value = null
     error.value = ''

@@ -4,7 +4,10 @@ import type {
   CompanionConversation,
   CompanionMessage
 } from '@my-robot/shared-types'
+import { useSpeech } from '@my-robot/ui'
 import { streamCompanion } from '@/api/companion'
+
+const speech = useSpeech()
 
 export const useCompanionStore = defineStore('companion', () => {
   const messages = ref<CompanionMessage[]>([])
@@ -50,6 +53,7 @@ export const useCompanionStore = defineStore('companion', () => {
             if (assistant.content === '' && !error.value) {
               assistant.interrupted = true
             }
+            maybeAutoSpeak(assistant)
           }
         }
       )
@@ -75,7 +79,14 @@ export const useCompanionStore = defineStore('companion', () => {
     return (await resp.json()) as CompanionConversation[]
   }
 
+  function maybeAutoSpeak(msg: CompanionMessage): void {
+    if (!speech.settings.autoRead) return
+    if (!msg.content || msg.interrupted) return
+    void speech.speak(msg.id, msg.content)
+  }
+
   function reset() {
+    speech.stop()
     messages.value = []
     conversationId.value = null
     error.value = ''
