@@ -29,6 +29,7 @@ export const useCompanionStore = defineStore('companion', () => {
     const content = text.trim()
     if (!content || streaming.value) return
 
+    speech.stop()
     streaming.value = true
     error.value = ''
     messages.value.push(makeMessage('user', content))
@@ -42,7 +43,10 @@ export const useCompanionStore = defineStore('companion', () => {
         {
           onEvent(event) {
             if (event.conversationId) conversationId.value = event.conversationId
-            if (event.delta) assistant.content += event.delta
+            if (event.delta) {
+              assistant.content += event.delta
+              speech.pushText(assistant.id, assistant.content)
+            }
             if (event.error) error.value = event.error
           },
           onError(message) {
@@ -53,7 +57,7 @@ export const useCompanionStore = defineStore('companion', () => {
             if (assistant.content === '' && !error.value) {
               assistant.interrupted = true
             }
-            maybeAutoSpeak(assistant)
+            speech.finish(assistant.id)
           }
         }
       )
@@ -77,12 +81,6 @@ export const useCompanionStore = defineStore('companion', () => {
     const resp = await fetch('/api/companion/conversations')
     if (!resp.ok) return []
     return (await resp.json()) as CompanionConversation[]
-  }
-
-  function maybeAutoSpeak(msg: CompanionMessage): void {
-    if (!speech.settings.autoRead) return
-    if (!msg.content || msg.interrupted) return
-    void speech.speak(msg.id, msg.content)
   }
 
   function reset() {

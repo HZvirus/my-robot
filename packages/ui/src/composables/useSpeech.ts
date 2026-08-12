@@ -35,7 +35,7 @@ export const TTS_VOICES: ReadonlyArray<{ value: string; label: string }> = [
 const STORAGE_KEY = 'my-robot:tts-settings'
 
 const DEFAULT_SETTINGS: SpeechSettings = {
-  autoRead: false,
+  autoRead: true,
   voice: 'xiaoyan',
   speed: 50,
   volume: 50,
@@ -70,10 +70,55 @@ const state = ref<SpeechState>('idle')
 const speakingId = ref<string | null>(null)
 const error = ref('')
 
-let generation = 0
+// ---------------------------------------------------------------------------
+// Playback engines.
+//
+// Primary (route C): Web Audio. Each MP3 frame is decoded as it arrives and
+// scheduled on a running playhead, so audio starts within a sentence while
+// synthesis is still producing frames.
+//
+// Fallback: when `AudioContext`/`decodeAudioData` is missing or rejects MP3
+// (known Safari/iOS issues), every sentence is buffered and replayed through
+// chained <audio> elements. Frames keep streaming but playback waits for the
+// sentence clip, preserving reliability across browsers.
+// ---------------------------------------------------------------------------
+
+type Engine = 'webaudio' | 'fallback'
+
+const SENTENCE_END = /[。！？…；;!?]/
+
+let engine: Engine = 'webaudio'
+let audioCtx: AudioContext | null = null
+let masterGain: GainNode | null = null
+let playhead = 0
+let activeSources: AudioBufferSourceNode[] = []
+
+interface Clip {
+  url: string
+}
+
+let clipQueue: Clip[] = []
+let currentAudio: HTMLAudioElement | null = null
+let currentClipUrl: string | null = null
+
+// ---------------------------------------------------------------------------
+// Streaming session: text is fed incrementally (chat SSE deltas); completed
+// sentences are synthesized immediately and their audio frames are queued for
+// playback, so speech follows the typewriter instead of waiting for the end.
+// ---------------------------------------------------------------------------
+
+interface FeedSession {
+  id: string
+  consumed: number // chars already consumed from the full content
+  buffer: string // pending text not yet split into sentences
+  finished: boolean
+  chain: Promise<void> // serializes synthesis so clips keep sentence order
+}
+
+let session: FeedSession | null = null
 let abortCtrl: AbortController | null = null
-let audioEl: HTMLAudioElement | null = null
-let objectUrl: string | null = null
+let queuePaused = false
+let pendingSynth = 0
 
 export function cleanTtsText(text: string): string {
   return text
@@ -103,50 +148,115 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
   return out
 }
 
-function stopAudio(): void {
-  if (audioEl) {
-    audioEl.onended = null
-    audioEl.onerror = null
-    audioEl.pause()
-    audioEl = null
-  }
-  if (objectUrl) {
-    URL.revokeObjectURL(objectUrl)
-    objectUrl = null
-  }
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer
 }
 
-function abortStream(): void {
-  if (abortCtrl) {
-    abortCtrl.abort()
-    abortCtrl = null
+function extractSentences(buf: string): { sentences: string[]; rest: string } {
+  let lastEnd = -1
+  for (let i = 0; i < buf.length; i++) {
+    if (SENTENCE_END.test(buf[i])) lastEnd = i
   }
+  if (lastEnd < 0) return { sentences: [], rest: buf }
+  const complete = buf.slice(0, lastEnd + 1)
+  const rest = buf.slice(lastEnd + 1)
+  const sentences = complete
+    .split(/[。！？…；;!?]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return { sentences, rest }
 }
 
-function stop(): void {
-  generation += 1
-  abortStream()
-  stopAudio()
-  state.value = 'idle'
-  speakingId.value = null
-}
-
-function playBlob(chunks: Uint8Array[]): void {
-  const blob = new Blob([concatBytes(chunks)], { type: 'audio/mpeg' })
-  objectUrl = URL.createObjectURL(blob)
-  const el = new Audio(objectUrl)
-  audioEl = el
-  const finish = () => {
-    if (audioEl !== el) return
-    stopAudio()
-    state.value = 'idle'
-    speakingId.value = null
-  }
-  el.onended = finish
-  el.onerror = finish
-  void el.play().catch(() => {
-    /* autoplay blocked: keep idle so the user can retry */
+/** Promise-based decodeAudioData that also supports the legacy callback API. */
+function decodeAudioData(ctx: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    const result = ctx.decodeAudioData(data) as unknown
+    if (result && typeof (result as { then?: unknown }).then === 'function') {
+      const promise = result as Promise<AudioBuffer>
+      promise.then(resolve, reject)
+    } else {
+      ctx.decodeAudioData(data, resolve, reject)
+    }
   })
+}
+
+function ensureAudioContext(): AudioContext | null {
+  if (engine === 'fallback') return null
+  if (audioCtx) return audioCtx
+  const ctor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!ctor) {
+    engine = 'fallback'
+    return null
+  }
+  try {
+    audioCtx = new ctor()
+    masterGain = audioCtx.createGain()
+    masterGain.connect(audioCtx.destination)
+    return audioCtx
+  } catch {
+    engine = 'fallback'
+    audioCtx = null
+    return null
+  }
+}
+
+/** Silence the Web Audio pipeline and switch all playback to <audio> clips. */
+function switchToFallback(): void {
+  if (engine === 'fallback') return
+  engine = 'fallback'
+  for (const src of activeSources) {
+    try {
+      src.stop()
+    } catch {
+      // already stopped
+    }
+  }
+  activeSources = []
+  playhead = 0
+  if (audioCtx && audioCtx.state !== 'closed') {
+    void audioCtx.close()
+  }
+  audioCtx = null
+  masterGain = null
+}
+
+/**
+ * Decode one audio frame and schedule it at the running playhead.
+ * Returns true when scheduled via Web Audio, false when the frame must be
+ * handled by the fallback path (decode failed / engine switched).
+ */
+async function scheduleFrame(encoded: string): Promise<boolean> {
+  const bytes = base64ToBytes(encoded)
+  const ctx = ensureAudioContext()
+  if (engine === 'fallback' || !ctx) return false
+  let buffer: AudioBuffer
+  try {
+    buffer = await decodeAudioData(ctx, toArrayBuffer(bytes))
+  } catch {
+    switchToFallback()
+    return false
+  }
+  if (ctx.state !== 'running') {
+    // iOS creates the context suspended; resume it so scheduled audio can play.
+    void ctx.resume().catch(() => {})
+  }
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  src.connect(masterGain as GainNode)
+  src.start(playhead)
+  activeSources.push(src)
+  playhead += buffer.duration
+  src.onended = () => {
+    const index = activeSources.indexOf(src)
+    if (index >= 0) activeSources.splice(index, 1)
+    maybeEndPlayback()
+  }
+  return true
 }
 
 async function fetchSse(
@@ -206,31 +316,84 @@ async function fetchSse(
   }
 }
 
-async function speak(id: string, text: string): Promise<void> {
-  stop()
-  const clean = cleanTtsText(text)
-  if (!clean) return
+function abortStream(): void {
+  if (abortCtrl) {
+    abortCtrl.abort()
+    abortCtrl = null
+  }
+}
 
-  const myGen = generation
+function stop(): void {
+  abortStream()
+  if (audioCtx) {
+    for (const src of activeSources) {
+      try {
+        src.stop()
+      } catch {
+        // already stopped
+      }
+    }
+    activeSources = []
+    playhead = 0
+  }
+  for (const clip of clipQueue) URL.revokeObjectURL(clip.url)
+  clipQueue = []
+  if (currentAudio) {
+    const el = currentAudio
+    currentAudio = null
+    el.onended = null
+    el.onerror = null
+    el.pause()
+  }
+  if (currentClipUrl) {
+    URL.revokeObjectURL(currentClipUrl)
+    currentClipUrl = null
+  }
+  session = null
+  queuePaused = false
+  state.value = 'idle'
+  speakingId.value = null
+}
+
+function startFeed(id: string): void {
+  stop()
   state.value = 'playing'
   speakingId.value = id
   error.value = ''
+  session = { id, consumed: 0, buffer: '', finished: false, chain: Promise.resolve() }
+}
 
+function pushSynth(s: FeedSession, text: string): void {
+  if (!text) return
+  pendingSynth += 1
+  s.chain = s.chain.then(async () => {
+    try {
+      if (session !== s) return
+      await streamSentence(text)
+    } catch {
+      // per-clip failure is handled inside streamSentence
+    } finally {
+      pendingSynth -= 1
+      maybeEndPlayback()
+    }
+  })
+}
+
+/**
+ * Synthesize one sentence. Frames are played as they arrive through the Web
+ * Audio engine; in fallback mode they are buffered and replayed as a clip.
+ */
+async function streamSentence(text: string): Promise<void> {
   const chunks: Uint8Array[] = []
+  let scheduleChain: Promise<void> = Promise.resolve()
   const ctrl = new AbortController()
   abortCtrl = ctrl
-
-  const handleError = (message: string) => {
-    if (generation !== myGen) return
-    error.value = message
-    state.value = 'idle'
-    speakingId.value = null
-  }
+  let failed = false
 
   await fetchSse(
     '/api/tts/stream',
     {
-      text: clean,
+      text,
       voice: settings.voice,
       speed: settings.speed,
       volume: settings.volume,
@@ -239,46 +402,143 @@ async function speak(id: string, text: string): Promise<void> {
     ctrl.signal,
     {
       onEvent(event) {
-        if (generation !== myGen) return
         if (event.error) {
-          handleError(event.error)
+          error.value = event.error
+          failed = true
           return
         }
-        if (event.audio) chunks.push(base64ToBytes(event.audio))
+        if (!event.audio) return
+        scheduleChain = scheduleChain.then(async () => {
+          if (engine === 'webaudio') {
+            const scheduled = await scheduleFrame(event.audio as string)
+            if (!scheduled) chunks.push(base64ToBytes(event.audio as string))
+          } else {
+            chunks.push(base64ToBytes(event.audio as string))
+          }
+        })
       },
       onError(message) {
-        handleError(message)
+        error.value = message
+        failed = true
       },
       onClose() {
-        if (generation !== myGen) return
-        abortCtrl = null
-        if (chunks.length === 0) {
-          handleError('未获取到语音')
-          return
-        }
-        playBlob(chunks)
+        // stream complete; scheduleChain finishes below
       }
     }
   )
+
+  await scheduleChain
+  if (failed || engine !== 'fallback' || chunks.length === 0) return
+  const blob = new Blob([concatBytes(chunks)], { type: 'audio/mpeg' })
+  clipQueue.push({ url: URL.createObjectURL(blob) })
+  playNext()
+}
+
+function playNext(): void {
+  if (queuePaused || state.value !== 'playing') return
+  if (currentAudio) return
+  const clip = clipQueue.shift()
+  if (!clip) {
+    maybeEndPlayback()
+    return
+  }
+  currentClipUrl = clip.url
+  const el = new Audio(clip.url)
+  currentAudio = el
+  const cleanup = () => {
+    if (currentAudio === el) currentAudio = null
+    if (currentClipUrl === clip.url) currentClipUrl = null
+    URL.revokeObjectURL(clip.url)
+  }
+  el.onended = () => {
+    cleanup()
+    playNext()
+  }
+  el.onerror = () => {
+    cleanup()
+    playNext()
+  }
+  void el.play().catch(() => {
+    cleanup()
+    playNext()
+  })
+}
+
+function maybeEndPlayback(): void {
+  if (pendingSynth > 0 || queuePaused || state.value !== 'playing') return
+  if (engine === 'webaudio') {
+    if (activeSources.length > 0) return
+  } else if (currentAudio || clipQueue.length > 0) {
+    return
+  }
+  if (session && session.finished) stop()
+}
+
+/** Feed newly arrived text for `id`; complete sentences are synthesized on the fly. */
+function pushText(id: string, content: string): void {
+  if (!settings.autoRead) return
+  if (!session || session.id !== id) startFeed(id)
+  const s = session as FeedSession
+  if (content.length <= s.consumed) return
+  const fresh = content.slice(s.consumed)
+  s.consumed = content.length
+  s.buffer += fresh
+  const { sentences, rest } = extractSentences(s.buffer)
+  s.buffer = rest
+  for (const sentence of sentences) {
+    pushSynth(s, cleanTtsText(sentence))
+  }
+}
+
+/** Flush the trailing partial text once the reply is complete. */
+function finish(id: string): void {
+  if (!session || session.id !== id) return
+  const s = session
+  s.finished = true
+  const rest = s.buffer.trim()
+  if (rest) {
+    s.buffer = ''
+    pushSynth(s, cleanTtsText(rest))
+  }
+  maybeEndPlayback()
+}
+
+/** Manual read-aloud of a whole message (plays frames as soon as they arrive). */
+function speak(id: string, text: string): void {
+  startFeed(id)
+  const s = session as FeedSession
+  s.finished = true
+  pushSynth(s, cleanTtsText(text))
+  maybeEndPlayback()
 }
 
 function pause(): void {
   if (state.value !== 'playing') return
-  if (audioEl) {
-    audioEl.pause()
-    state.value = 'paused'
+  queuePaused = true
+  if (engine === 'webaudio' && audioCtx && audioCtx.state === 'running') {
+    void audioCtx.suspend()
   }
+  if (currentAudio) currentAudio.pause()
+  state.value = 'paused'
 }
 
 function resume(): void {
-  if (state.value !== 'paused' || !audioEl) return
-  void audioEl.play().catch(() => {})
+  if (state.value !== 'paused') return
+  queuePaused = false
   state.value = 'playing'
+  if (engine === 'webaudio' && audioCtx && audioCtx.state !== 'running') {
+    void audioCtx.resume().catch(() => {})
+  }
+  if (currentAudio) {
+    void currentAudio.play().catch(() => {})
+    return
+  }
+  playNext()
 }
 
 function toggle(id: string, text: string): void {
   if (state.value === 'idle' || speakingId.value !== id) {
-    void speak(id, text)
+    speak(id, text)
     return
   }
   if (state.value === 'playing') {
@@ -304,6 +564,8 @@ export function useSpeech() {
     settings,
     toggle,
     speak,
+    pushText,
+    finish,
     pause,
     resume,
     stop,

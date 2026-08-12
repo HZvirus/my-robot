@@ -25,6 +25,7 @@ export const useChatStore = defineStore('chat', () => {
     const content = text.trim()
     if (!content || streaming.value) return
 
+    speech.stop()
     streaming.value = true
     error.value = ''
     messages.value.push(makeMessage('user', content))
@@ -38,7 +39,10 @@ export const useChatStore = defineStore('chat', () => {
         {
           onEvent(event) {
             if (event.conversationId) conversationId.value = event.conversationId
-            if (event.delta) assistant.content += event.delta
+            if (event.delta) {
+              assistant.content += event.delta
+              speech.pushText(assistant.id, assistant.content)
+            }
             if (event.error) error.value = event.error
           },
           onError(message) {
@@ -49,7 +53,7 @@ export const useChatStore = defineStore('chat', () => {
             if (assistant.content === '' && !error.value) {
               assistant.interrupted = true
             }
-            maybeAutoSpeak(assistant)
+            speech.finish(assistant.id)
           }
         }
       )
@@ -73,12 +77,6 @@ export const useChatStore = defineStore('chat', () => {
     const resp = await fetch('/api/chat/conversations')
     if (!resp.ok) return []
     return (await resp.json()) as ChatConversation[]
-  }
-
-  function maybeAutoSpeak(msg: ChatMessage): void {
-    if (!speech.settings.autoRead) return
-    if (!msg.content || msg.interrupted) return
-    void speech.speak(msg.id, msg.content)
   }
 
   function reset() {
