@@ -93,6 +93,8 @@ export function streamSmartTtsWs(
   let ended = false
   /** 是否已发出首个非结束帧（用于决定 status 0/1） */
   let started = false
+  /** 是否已发出结束帧（status 2） */
+  let finalSent = false
   /** 本次请求是否已收敛（onClose 已回调 / done 已 resolve） */
   let settled = false
   /** 文本帧序号，随帧递增 */
@@ -176,14 +178,18 @@ export function streamSmartTtsWs(
       const isFinal = ended && pending.length === 0
       if (isFinal) {
         sendFrame(text, 2)
+        finalSent = true
       } else {
         sendFrame(text, started ? 1 : 0)
         started = true
       }
     }
-    // end() 已调用但从未发过任何帧：发一个空结束帧（对应"一次性合成"）
-    if (ended && !started) {
+    // end() 已调用但缓冲已空（文本此前已按 status 0/1 发完）或从未发过帧：
+    // 必须补发一个空结束帧（status 2），否则服务端收不到结束标记，
+    // 会一直等待上行数据并在超时后报错（如 26005 No active up data）。
+    if (ended && !finalSent) {
       sendFrame('', 2)
+      finalSent = true
       started = true
     }
   }
