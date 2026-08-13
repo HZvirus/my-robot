@@ -10,15 +10,17 @@
 | [04-local-ollama.md](./04-local-ollama.md) | 使用本地模型：Ollama 的 LLM 与向量嵌入、知识库入库 |
 | [05-frontend-streaming.md](./05-frontend-streaming.md) | 前端流式处理：fetch + ReadableStream 的 SSE 解析、逐字渲染、语音朗读 |
 | [06-language-processing.md](./06-language-processing.md) | 语言处理：文本分块、向量化、检索、上下文拼接、科室匹配、提示词设计 |
+| [07-smart-tts-streaming.md](./07-smart-tts-streaming.md) | 超拟人 TTS：讯飞双向流式合成、WS 直连、MSE 连续播放与关键修复 |
 
 ## 相关代码位置
 
 - 后端：`apps/ai-service/app/`
-  - 路由：`api/routes/{chat,companion,triage,tts}.py`
-  - 服务：`services/{chat_service,companion_service,triage_service,ollama_client,embedding,vector_store,kb_loader,text_splitter,departments,tts_service}.py`
-  - DTO：`models/{chat,companion,triage,tts}.py`，ORM：`db/models.py`
+  - 路由：`api/routes/{chat,companion,triage,tts,smart_tts}.py`
+  - 服务：`services/{chat_service,companion_service,triage_service,ollama_client,embedding,vector_store,kb_loader,text_splitter,departments,tts_service,smart_tts_service}.py`
+  - DTO：`models/{chat,companion,triage,tts,smart_tts}.py`，ORM：`db/models.py`
 - 前端：`apps/h5-app1/`（智能助手 / 智能导诊 / 挂号）、`apps/h5-app2/`（健康陪伴）
   - SSE 工具：`src/utils/sse.ts`，会话状态：`src/stores/{chat,triage,companion}.ts`
+  - 超拟人 TTS（小安快速版）：`src/views/CompanionFastView.vue`、`src/composables/useSmartTts*.ts`、`src/api/smartTts*.ts`
 - 共享：`packages/shared-types/`（TS 类型）、`packages/ui/`（`TypewriterText`、`SpeechButton`、`useSpeech`）
 - 知识库：`apps/ai-service/knowledge/*.md`，入库脚本：`apps/ai-service/scripts/ingest_kb.py`
 
@@ -31,3 +33,4 @@
 | 健康陪伴聊天 | `POST /api/companion/chat` | 本地 Ollama | 是 |
 | 智能导诊（RAG） | `POST /api/triage/chat` | 本地 Ollama + ChromaDB | 是 |
 | 语音朗读（TTS） | `POST /api/tts/stream` | 讯飞 WebSocket | 是 |
+| 超拟人 TTS（小安快速版） | `POST /api/smart-tts/stream` / `stream-text` | 讯飞超拟人 WS（可浏览器直连） | 是 |

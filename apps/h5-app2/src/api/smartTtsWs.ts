@@ -4,9 +4,8 @@ import type {
   SmartTtsStreamTextOptions,
   SmartTtsTextStreamClient
 } from '@/api/smartTts'
-import { IFLYTEK_SMART_TTS } from '@/config/smartTts'
 
-/** 签名 WebSocket 地址（含本次会话所需的 app_id） */
+/** 后端签名下发的 WebSocket 地址（含本次会话所需的 app_id） */
 interface SmartTtsWsUrl {
   url: string
   app_id: string
@@ -23,60 +22,13 @@ function textToBase64(text: string): string {
   return btoa(binary)
 }
 
-/** 将字节数组编码为 base64 */
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const CHUNK = 0x8000
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
-  }
-  return btoa(binary)
-}
-
-/** 对字符串做 RFC3986 编码（与后端 urllib.parse.quote 语义对齐） */
-function encodeComponent(value: string): string {
-  return encodeURIComponent(value)
-}
-
-/**
- * 使用 Web Crypto 在浏览器端生成讯飞鉴权方式二的签名 WebSocket URL：
- * 对 "host/date/request-line" 做 HMAC-SHA256，并把 authorization/date/host
- * 拼接到查询参数中，浏览器即可直连。
- */
-async function buildSignedWsUrl(): Promise<string> {
-  const { baseUrl, apiKey, apiSecret } = IFLYTEK_SMART_TTS
-  const u = new URL(baseUrl)
-  const host = u.host
-  const path = u.pathname
-  const date = new Date().toUTCString()
-  const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`
-  const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  )
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signatureOrigin))
-  const signature = bytesToBase64(new Uint8Array(sig))
-  const authorizationOrigin =
-    `api_key="${apiKey}", algorithm="hmac-sha256", ` +
-    `headers="host date request-line", signature="${signature}"`
-  const authorization = bytesToBase64(encoder.encode(authorizationOrigin))
-  const query =
-    `authorization=${encodeComponent(authorization)}` +
-    `&date=${encodeComponent(date)}&host=${encodeComponent(host)}`
-  return `${baseUrl}?${query}`
-}
-
 /**
  * 通过 WebSocket 直连讯飞超拟人语音合成接口的流式客户端。
  *
  * 与 streamSmartTtsText（SSE 转发）的差异：
- * 1. 浏览器无法在 WebSocket 握手时附加 `x-api-key` 头，因此必须用
- *    HMAC-SHA256 签名 URL 直连；已配置前端凭据（config/smartTts.ts）时
- *    在浏览器端签名，否则回退到后端 `/api/smart-tts/ws-url` 获取签名地址。
+ * 1. 浏览器无法在 WebSocket 握手时附加 `x-api-key` 头，因此连接必须使用
+ *    HMAC-SHA256 签名 URL。签名统一由后端完成：前端调用
+ *    `GET /api/smart-tts/ws-url` 获取签名地址，不持有任何讯飞凭据。
  * 2. push() 的文本会按协议帧（status 0/1/2、递增 seq）增量发送，
  *    音频帧随收随报，无需等整段文本结束。
  * 3. 音频编码使用 lame（MP3），采样率默认 24000。
@@ -194,18 +146,8 @@ export function streamSmartTtsWs(
     }
   }
 
+  /** 请求后端签名下发的 WebSocket 直连地址 */
   async function resolveWsUrl(): Promise<SmartTtsWsUrl> {
-    // 优先在浏览器端用本地凭据签名直连
-    const creds = IFLYTEK_SMART_TTS
-    if (creds.appId && creds.apiKey && creds.apiSecret) {
-      try {
-        const url = await buildSignedWsUrl()
-        return { url, app_id: creds.appId }
-      } catch (err) {
-        console.error('smart tts client-side signing failed:', err)
-        // 回退到后端签名
-      }
-    }
     const resp = await fetch('/api/smart-tts/ws-url', {
       signal: abortCtrl.signal
     })

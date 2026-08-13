@@ -81,6 +81,24 @@ def test_auth_method2_signs_url_without_header() -> None:
     assert svc.build_headers() is None
 
 
+def test_smart_tts_ws_url_returns_signed_url(monkeypatch) -> None:
+    monkeypatch.setattr(smart_tts_route, "smart_tts_service", _service(auth_method=2))
+    resp = client.get("/api/smart-tts/ws-url")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["url"].startswith(
+        "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6?"
+    )
+    assert "authorization=" in data["url"]
+    assert data["app_id"] == "a"
+
+
+def test_smart_tts_ws_url_rejects_auth_method1(monkeypatch) -> None:
+    monkeypatch.setattr(smart_tts_route, "smart_tts_service", _service(auth_method=1))
+    resp = client.get("/api/smart-tts/ws-url")
+    assert resp.status_code == 400
+
+
 def test_smart_tts_stream_yields_audio(monkeypatch) -> None:
     _patch_service(monkeypatch, FakeSmartTTSService(chunks=[b"\xff\xfb\x01", b"\x02\x03"]))
     response = client.post(
