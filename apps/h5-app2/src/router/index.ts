@@ -19,6 +19,11 @@ const router = createRouter({
       component: () => import('@/views/CompanionSmartView.vue')
     },
     {
+      path: '/companion/fast',
+      name: 'companion-fast',
+      component: () => import('@/views/CompanionFastView.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue')

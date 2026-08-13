@@ -45,6 +45,12 @@ onMounted(async () => {
       >
         健康陪伴智慧版 · 超拟人语音
       </button>
+      <button
+        class="smart-btn"
+        @click="router.push('/companion/fast')"
+      >
+        健康陪伴快速版 · WebSocket 直连
+      </button>
       <p class="hero-tip">
         健康科普与陪伴，不替代专业医疗诊断
       </p>

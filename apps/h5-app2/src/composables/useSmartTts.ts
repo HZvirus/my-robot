@@ -4,8 +4,24 @@ import { cleanTtsText } from '@my-robot/ui'
 import { streamSmartTtsText } from '@/api/smartTts'
 import type {
   SmartTtsStreamEvent,
+  SmartTtsStreamHandlers,
+  SmartTtsStreamTextOptions,
   SmartTtsTextStreamClient
 } from '@/api/smartTts'
+
+/** 流式合成传输层：决定音频经后端 SSE 转发还是浏览器 WebSocket 直连 */
+type SmartTtsTransport = (
+  options: SmartTtsStreamTextOptions,
+  handlers: SmartTtsStreamHandlers
+) => SmartTtsTextStreamClient
+
+/** 当前使用的传输层（模块级单例，可被 useSmartTtsWs 切换到 WebSocket 直连） */
+let smartTtsTransport: SmartTtsTransport = streamSmartTtsText
+
+/** 切换流式合成传输层（默认 SSE 转发，可由 useSmartTtsWs 切换到直连） */
+export function setSmartTtsTransport(transport: SmartTtsTransport): void {
+  smartTtsTransport = transport
+}
 
 /**
  * 语音合成播放状态：
@@ -414,7 +430,7 @@ function pushText(id: string, content: string): void {
   const clean = cleanTtsText(fresh)
   if (!clean) return
   if (!s.client) {
-    s.client = streamSmartTtsText(
+    s.client = smartTtsTransport(
       {
         voice: settings.voice,
         speed: settings.speed,
@@ -468,7 +484,7 @@ function speak(id: string, text: string): void {
   s.finished = true
   const clean = cleanTtsText(text)
   if (clean) {
-    s.client = streamSmartTtsText(
+    s.client = smartTtsTransport(
       {
         voice: settings.voice,
         speed: settings.speed,
@@ -552,22 +568,26 @@ function isPlaying(id: string): boolean {
   return state.value === 'playing' && speakingId.value === id
 }
 
-/** 组合式函数入口：对外暴露状态与操作方法 */
+/** 共享的播放 API 对象（模块级单例，两个传输层入口共用） */
+export const smartTtsApi = {
+  state,
+  speakingId,
+  error,
+  settings,
+  voices: SMART_TTS_VOICES,
+  toggle,
+  speak,
+  pushText,
+  finish,
+  pause,
+  resume,
+  stop,
+  isActive,
+  isPlaying
+}
+
+/** 组合式函数入口：默认使用 SSE 转发传输层 */
 export function useSmartTts() {
-  return {
-    state,
-    speakingId,
-    error,
-    settings,
-    voices: SMART_TTS_VOICES,
-    toggle,
-    speak,
-    pushText,
-    finish,
-    pause,
-    resume,
-    stop,
-    isActive,
-    isPlaying
-  }
+  setSmartTtsTransport(streamSmartTtsText)
+  return smartTtsApi
 }
