@@ -39,6 +39,12 @@ onMounted(async () => {
       >
         开始和小安聊天
       </button>
+      <button
+        class="smart-btn"
+        @click="router.push('/companion/smart')"
+      >
+        健康陪伴智慧版 · 超拟人语音
+      </button>
       <p class="hero-tip">
         健康科普与陪伴，不替代专业医疗诊断
       </p>
@@ -144,6 +150,22 @@ onMounted(async () => {
 }
 
 .start-btn:active {
+  transform: scale(0.98);
+}
+
+.smart-btn {
+  margin-top: 12px;
+  border: 1px solid #3f9e4d;
+  background: rgba(255, 255, 255, 0.85);
+  color: #2e7d3d;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 24px;
+  padding: 10px 26px;
+  cursor: pointer;
+}
+
+.smart-btn:active {
   transform: scale(0.98);
 }
 

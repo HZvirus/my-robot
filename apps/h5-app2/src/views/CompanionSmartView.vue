@@ -27,12 +27,28 @@ const activeAssistantId = computed(() => {
   return null
 })
 
+const voiceStateText = computed(() => {
+  if (speech.state.value === 'playing') return '语音朗读中'
+  if (speech.state.value === 'paused') return '已暂停朗读'
+  return '语音就绪'
+})
+
 const quickPrompts = [
-  '最近压力很大，想找人聊聊',
-  '晚上总睡不好怎么办',
-  '可以给我一些健康饮食的建议吗',
-  '今天心情不太好'
+  '最近工作压力很大，陪我聊聊好吗',
+  '晚上总睡不好，有什么放松的方法',
+  '帮我推荐一份一日三餐的健康搭配',
+  '今天情绪很低落，想听你开导我'
 ]
+
+function pickVoice(value: string) {
+  speech.settings.voice = value
+  if (speech.state.value !== 'idle') {
+    const last = store.messages[store.messages.length - 1]
+    if (last && last.role === 'assistant' && last.content) {
+      speech.toggle(last.id, last.content)
+    }
+  }
+}
 
 function send() {
   const text = input.value.trim()
@@ -73,18 +89,51 @@ watch(
       <div class="header-title">
         <span class="avatar">安</span>
         <div class="title-text">
-          <span class="chat-title">小安 · 健康陪伴</span>
-          <span class="chat-subtitle">随时陪你说说话</span>
+          <span class="chat-title">小安 · 健康陪伴智慧版</span>
+          <span class="chat-subtitle">超拟人语音陪伴 · 边聊边听</span>
         </div>
       </div>
-      <button
-        class="new-btn"
-        :disabled="store.streaming"
-        @click="newChat"
-      >
-        新对话
-      </button>
+      <div class="header-actions">
+        <span
+          class="voice-pill"
+          :class="speech.state.value"
+        >
+          {{ voiceStateText }}
+        </span>
+        <button
+          class="new-btn"
+          :disabled="store.streaming"
+          @click="newChat"
+        >
+          新对话
+        </button>
+      </div>
     </header>
+
+    <div class="voice-panel">
+      <div class="voice-row">
+        <span class="voice-label">超拟人音色</span>
+        <div class="voice-chips">
+          <button
+            v-for="v in speech.voices"
+            :key="v.value"
+            class="voice-chip"
+            :class="{ active: speech.settings.voice === v.value }"
+            :title="v.label"
+            @click="pickVoice(v.value)"
+          >
+            {{ v.label.split('（')[0] }}
+          </button>
+        </div>
+      </div>
+      <label class="auto-read">
+        <span>自动朗读回复</span>
+        <input
+          v-model="speech.settings.autoRead"
+          type="checkbox"
+        >
+      </label>
+    </div>
 
     <div
       ref="listEl"
@@ -94,8 +143,9 @@ watch(
         v-if="store.messages.length === 0"
         class="welcome"
       >
-        你好呀，我是小安。工作累了、心里烦了、想聊聊身体和心情，
-        都可以随时跟我说，我一直在这里陪着你。
+        你好呀，我是小安。智慧版的我用超拟人语音陪着你——
+        你的每句话我都会认真听，回复也会温柔地读给你听。
+        工作累了、心里烦了、想聊聊身体和心情，都可以随时跟我说。
       </p>
 
       <div
@@ -126,6 +176,12 @@ watch(
             v-if="m.role === 'assistant' && store.streaming && !m.content"
             :size="18"
           />
+          <span
+            v-if="m.role === 'assistant' && speech.isPlaying(m.id)"
+            class="speaking"
+          >
+            ● 正在朗读
+          </span>
           <span
             v-if="m.interrupted && m.role === 'assistant'"
             class="interrupted"
@@ -171,7 +227,7 @@ watch(
         v-model="input"
         class="input"
         :disabled="store.streaming"
-        placeholder="和小安聊聊…"
+        placeholder="和小安智慧版聊聊…"
         @keyup.enter="send"
       >
       <BaseButton
@@ -184,7 +240,7 @@ watch(
     </footer>
 
     <p class="disclaimer">
-      小安是 AI 健康陪伴助手，不提供医疗诊断。如有紧急症状请立即就医或拨打 120。
+      小安智慧版是 AI 健康陪伴助手，不提供医疗诊断。如有紧急症状请立即就医或拨打 120。
     </p>
   </div>
 </template>
@@ -224,6 +280,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .avatar {
@@ -237,23 +295,54 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .title-text {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+  min-width: 0;
 }
 
 .chat-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-subtitle {
   font-size: 11px;
   color: #909399;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.voice-pill {
+  font-size: 11px;
+  color: #3f9e4d;
+  background: #eaf6ef;
+  border-radius: 12px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.voice-pill.playing {
+  color: #fff;
+  background: #67c23a;
+}
+
+.voice-pill.paused {
+  color: #b88230;
+  background: #fdf3e0;
 }
 
 .new-btn {
@@ -269,6 +358,63 @@ watch(
 .new-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.voice-panel {
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  padding: 8px 12px;
+}
+
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.voice-label {
+  font-size: 12px;
+  color: #606266;
+  flex-shrink: 0;
+}
+
+.voice-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.voice-chip {
+  flex-shrink: 0;
+  border: 1px solid #dcdfe6;
+  color: #606266;
+  background: #fff;
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.voice-chip.active {
+  border-color: #67c23a;
+  color: #3f9e4d;
+  background: #eaf6ef;
+  font-weight: 600;
+}
+
+.auto-read {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #606266;
+  cursor: pointer;
+}
+
+.auto-read input {
+  accent-color: #67c23a;
 }
 
 .msg-list {
@@ -335,6 +481,14 @@ watch(
   border-color: #3f9e4d;
   color: #fff;
   border-top-right-radius: 4px;
+}
+
+.speaking {
+  display: inline-block;
+  color: #67c23a;
+  font-size: 12px;
+  margin-left: 6px;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .interrupted {
@@ -421,5 +575,16 @@ watch(
   color: #b0b3b8;
   text-align: center;
   background: #fff;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 </style>

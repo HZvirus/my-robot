@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # --- Companion (health companionship chat, streaming) ---
     COMPANION_MAX_HISTORY: int = 12
 
-    # --- iFlytek TTS (voice read-aloud) ---
+    # --- iFlytek TTS (voice read-aloud, v2 online TTS) ---
     IFLYTEK_APP_ID: str = ""
     IFLYTEK_API_KEY: str = ""
     IFLYTEK_API_SECRET: str = ""
@@ -32,6 +32,21 @@ class Settings(BaseSettings):
     IFLYTEK_TTS_VOLUME: int = 50
     IFLYTEK_TTS_PITCH: int = 50
     IFLYTEK_TTS_MAX_BYTES: int = 8000
+
+    # --- iFlytek Super Smart TTS (超拟人语音合成, independent of v2) ---
+    # AUTH_METHOD: 1 = x-api-key header with APIPassword, 2 = HMAC-SHA256 signed URL
+    IFLYTEK_SMART_TTS_URL: str = "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6"
+    IFLYTEK_SMART_TTS_AUTH_METHOD: int = 1
+    IFLYTEK_SMART_TTS_APP_ID: str = ""
+    IFLYTEK_SMART_TTS_API_KEY: str = ""
+    IFLYTEK_SMART_TTS_API_SECRET: str = ""
+    IFLYTEK_SMART_TTS_API_PASSWORD: str = ""
+    IFLYTEK_SMART_TTS_VOICE: str = "x6_lingxiaoxuan_flow"
+    IFLYTEK_SMART_TTS_SPEED: int = 50
+    IFLYTEK_SMART_TTS_VOLUME: int = 50
+    IFLYTEK_SMART_TTS_PITCH: int = 50
+    IFLYTEK_SMART_TTS_SAMPLE_RATE: int = 24000
+    IFLYTEK_SMART_TTS_MAX_BYTES: int = 65536
 
     # --- Triage / RAG (Ollama + ChromaDB) ---
     OLLAMA_BASE_URL: str = "http://localhost:11434"

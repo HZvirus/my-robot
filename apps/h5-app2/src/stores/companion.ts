@@ -4,10 +4,10 @@ import type {
   CompanionConversation,
   CompanionMessage
 } from '@my-robot/shared-types'
-import { useSpeech } from '@my-robot/ui'
+import { useSmartTts } from '@/composables/useSmartTts'
 import { streamCompanion } from '@/api/companion'
 
-const speech = useSpeech()
+const speech = useSmartTts()
 
 export const useCompanionStore = defineStore('companion', () => {
   const messages = ref<CompanionMessage[]>([])

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import chat, companion, profile, triage, tts
+from app.api.routes import chat, companion, profile, smart_tts, triage, tts
 from app.core.config import settings
 from app.core.logger import setup_logging
 from app.db.models import Conversation, Message  # noqa: F401 - register ORM models
@@ -37,6 +37,7 @@ app.include_router(companion.router, prefix="/api", tags=["companion"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(triage.router, prefix="/api", tags=["triage"])
 app.include_router(tts.router, prefix="/api", tags=["tts"])
+app.include_router(smart_tts.router, prefix="/api", tags=["smart-tts"])
 
 
 @app.get("/health")

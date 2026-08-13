@@ -14,6 +14,11 @@ const router = createRouter({
       component: () => import('@/views/CompanionView.vue')
     },
     {
+      path: '/companion/smart',
+      name: 'companion-smart',
+      component: () => import('@/views/CompanionSmartView.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue')

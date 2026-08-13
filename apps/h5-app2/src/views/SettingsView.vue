@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useSpeech } from '@my-robot/ui'
+import { useSmartTts } from '@/composables/useSmartTts'
 import { getProfile, updateProfile } from '@/api/profile'
 
-const speech = useSpeech()
+const speech = useSmartTts()
 const nickname = ref('')
 const loading = ref(false)
 
