@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { TTS_VOICES, useSpeech } from '@my-robot/ui'
+import { useSpeech } from '@my-robot/ui'
 import { getProfile, updateProfile } from '@/api/profile'
 
 const speech = useSpeech()
@@ -59,7 +59,7 @@ void load()
         <span>音色</span>
         <select v-model="speech.settings.voice">
           <option
-            v-for="v in TTS_VOICES"
+            v-for="v in speech.voices"
             :key="v.value"
             :value="v.value"
           >

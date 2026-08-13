@@ -14,10 +14,6 @@ class Settings(BaseSettings):
     PORT: int = 8000
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 
-    AI_API_KEY: str = ""
-    AI_API_BASE: str = ""
-    AI_MODEL: str = "gpt-4o-mini"
-
     DATABASE_URL: str = "sqlite:///./app.db"
 
     # --- General chat (streaming, context-aware) ---

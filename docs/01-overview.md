@@ -14,7 +14,7 @@
 
 此外还有：
 
-- `POST /api/chat`：旧的**非流式**聊天，直接调用云端 OpenAI 兼容 API（`services/ai_service.py`，配置 `AI_API_KEY/AI_API_BASE/AI_MODEL`），响应为普通 JSON（snake_case 字段，历史遗留）。
+- `POST /api/chat`：旧的**非流式**聊天，同样走本地 Ollama（`services/ai_service.py`），响应为普通 JSON（snake_case 字段，历史遗留）。
 - `POST /api/tts/stream`：讯飞 TTS，见 [03-iflytek-tts.md](./03-iflytek-tts.md)。
 
 ## 2. 目录结构
@@ -44,11 +44,6 @@ apps/ai-service/
 ## 3. 配置项（`app/core/config.py` 与 `.env`）
 
 ```ini
-# 云端 OpenAI 兼容 API（仅旧的 /api/chat 使用）
-AI_API_KEY=...
-AI_API_BASE=...
-AI_MODEL=...
-
 # 通用聊天 / 健康陪伴的历史条数上限
 CHAT_MAX_HISTORY=10
 COMPANION_MAX_HISTORY=12

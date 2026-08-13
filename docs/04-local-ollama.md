@@ -86,6 +86,6 @@ python -m scripts.ingest_kb      # 或 install 后直接 ingest-kb
 - 历史只取最近 `TRIAGE_MAX_HISTORY = 6` 条；
 - 检索片段注入 system 时累计不超过 `CONTEXT_BUDGET = 4000` 字符，超出截断（`triage_service._format_context`）。
 
-## 7. 后端不使用云端模型的部分
+## 7. 全部接口均走本地模型
 
-只有旧的非流式接口 `POST /api/chat`（`services/ai_service.py`）调用云端 OpenAI 兼容 API（`AI_API_BASE`，例如 DeepSeek），用于保留兼容；新的 chat/companion/triage 三个流式接口全部走本地 Ollama。
+chat / companion / triage 三个流式接口，以及旧的兼容接口 `POST /api/chat`（`services/ai_service.py`），全部走本地 Ollama，不依赖任何云端模型或 API Key（`.env` 中已无 `AI_API_*` 配置）。

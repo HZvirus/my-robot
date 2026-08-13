@@ -32,6 +32,9 @@ export const TTS_VOICES: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'x4_lingfei_oral', label: '聆飞（男 · 英语）' }
 ]
 
+let ttsEndpoint = '/api/tts/stream'
+let configuredVoices: ReadonlyArray<{ value: string; label: string }> = TTS_VOICES
+
 const STORAGE_KEY = 'my-robot:tts-settings'
 
 const DEFAULT_SETTINGS: SpeechSettings = {
@@ -65,6 +68,26 @@ watch(
   },
   { deep: true }
 )
+
+/** Override the TTS streaming endpoint, e.g. `/api/tts/stream`. */
+export function setTtsEndpoint(url: string): void {
+  ttsEndpoint = url
+}
+
+/**
+ * Override the voice picker options. If the currently selected voice is not in
+ * the new list, it is reset to `defaultVoice` (or the first entry).
+ */
+export function setTtsVoices(
+  voices: ReadonlyArray<{ value: string; label: string }>,
+  defaultVoice?: string
+): void {
+  configuredVoices = voices
+  const fallback = defaultVoice ?? voices[0]?.value
+  if (fallback && !voices.some((v) => v.value === settings.voice)) {
+    settings.voice = fallback
+  }
+}
 
 const state = ref<SpeechState>('idle')
 const speakingId = ref<string | null>(null)
@@ -319,6 +342,19 @@ async function fetchSse(
   }
 }
 
+function requestTts(
+  url: string,
+  body: TtsStreamRequest,
+  signal: AbortSignal,
+  handlers: {
+    onEvent: (event: TtsStreamEvent) => void
+    onError: (message: string) => void
+    onClose: () => void
+  }
+): Promise<void> {
+  return fetchSse(url, body, signal, handlers)
+}
+
 function abortStream(): void {
   if (abortCtrl) {
     abortCtrl.abort()
@@ -393,8 +429,8 @@ function pushSynth(s: FeedSession, text: string): void {
 }
 
 /**
- * Synthesize one text chunk via the v2 TTS service (/api/tts/stream). The
- * whole MP3 is buffered, decoded once and played — a gapless one-shot replay.
+ * Synthesize one text chunk via the configured TTS endpoint. The whole MP3
+ * is buffered, decoded once and played - a gapless one-shot replay.
  */
 async function streamSentence(text: string): Promise<void> {
   const chunks: Uint8Array[] = []
@@ -402,8 +438,8 @@ async function streamSentence(text: string): Promise<void> {
   abortCtrl = ctrl
   let failed = false
 
-  await fetchSse(
-    '/api/tts/stream',
+  await requestTts(
+    ttsEndpoint,
     {
       text,
       voice: settings.voice,
@@ -613,6 +649,7 @@ export function useSpeech() {
     speakingId,
     error,
     settings,
+    voices: configuredVoices,
     toggle,
     speak,
     pushText,
