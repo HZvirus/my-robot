@@ -32,39 +32,6 @@ def _service() -> TTSService:
     return TTSService(app_id="a", api_key="b", api_secret="c", base_url="wss://tts-api.xfyun.cn/v2/tts")
 
 
-def test_split_text_short_text_is_single_frame() -> None:
-    assert TTSService.split_text("你好，世界。", 8000) == ["你好，世界。"]
-
-
-def test_split_text_splits_at_sentence_boundaries() -> None:
-    text = "第一句话。" + "第二句话。" + "第三句话！"
-    frames = TTSService.split_text(text, 40)
-    assert "".join(frames) == text
-    assert len(frames) == 2
-    assert frames[0] == "第一句话。第二句话。"
-    assert frames[1] == "第三句话！"
-
-
-def test_split_text_hard_cuts_long_sentence() -> None:
-    long_sentence = "长" * 100 + "。"
-    frames = TTSService.split_text(long_sentence, 50)
-    assert "".join(frames) == long_sentence
-    for frame in frames:
-        assert len(frame.encode("utf-8")) <= 50
-
-
-def test_split_text_keeps_multibyte_bytes_boundary() -> None:
-    text = "中" * 3000 + "啊"
-    frames = TTSService.split_text(text, 200)
-    assert "".join(frames) == text
-    for frame in frames:
-        assert len(frame.encode("utf-8")) <= 200
-
-
-def test_split_text_empty() -> None:
-    assert TTSService.split_text("", 100) == []
-
-
 def test_truncate_to_bytes_respects_limit() -> None:
     text = "汉字汉字汉字"
     assert _truncate_to_bytes(text, 7) == "汉字"

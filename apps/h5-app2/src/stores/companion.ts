@@ -57,7 +57,7 @@ export const useCompanionStore = defineStore('companion', () => {
             if (assistant.content === '' && !error.value) {
               assistant.interrupted = true
             }
-            speech.finish(assistant.id)
+            if (speech.settings.autoRead) speech.finish(assistant.id)
           }
         }
       )

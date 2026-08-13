@@ -87,6 +87,18 @@ type Engine = 'webaudio' | 'fallback'
 
 const SENTENCE_END = /[。！？…；;!?]/
 
+// Utterance batching: the first sentence is synthesized immediately for a fast
+// first word; subsequent sentences are grouped into utterances and sent in one
+// request (fewer connections). A buffer flushes when it has enough sentences,
+// grows too large, or has been waiting too long.
+const UTTERANCE_MIN_SENTENCES = 2
+const UTTERANCE_MAX_BYTES = 400
+const UTTERANCE_MAX_WAIT_MS = 1000
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length
+}
+
 let engine: Engine = 'webaudio'
 let audioCtx: AudioContext | null = null
 let masterGain: GainNode | null = null
@@ -113,6 +125,10 @@ interface FeedSession {
   buffer: string // pending text not yet split into sentences
   finished: boolean
   chain: Promise<void> // serializes synthesis so clips keep sentence order
+  sentFirst: boolean // first sentence was already synthesized immediately
+  utterance: string // buffered sentences waiting to be sent as one request
+  utteranceSentences: number
+  utteranceStart: number // ms timestamp when the current utterance began
 }
 
 let session: FeedSession | null = null
@@ -225,24 +241,12 @@ function switchToFallback(): void {
   masterGain = null
 }
 
-/**
- * Decode one audio frame and schedule it at the running playhead.
- * Returns true when scheduled via Web Audio, false when the frame must be
- * handled by the fallback path (decode failed / engine switched).
- */
-async function scheduleFrame(encoded: string): Promise<boolean> {
-  const bytes = base64ToBytes(encoded)
-  const ctx = ensureAudioContext()
-  if (engine === 'fallback' || !ctx) return false
-  let buffer: AudioBuffer
-  try {
-    buffer = await decodeAudioData(ctx, toArrayBuffer(bytes))
-  } catch {
-    switchToFallback()
-    return false
-  }
-  if (ctx.state !== 'running') {
-    // iOS creates the context suspended; resume it so scheduled audio can play.
+/** Schedule an already-decoded buffer at the running playhead (gapless). */
+function playBuffer(buffer: AudioBuffer): void {
+  const ctx = audioCtx
+  if (!ctx || engine === 'fallback') return
+  if (!queuePaused && ctx.state !== 'running') {
+    // iOS creates the context suspended; resume it so audio can play.
     void ctx.resume().catch(() => {})
   }
   const src = ctx.createBufferSource()
@@ -256,7 +260,6 @@ async function scheduleFrame(encoded: string): Promise<boolean> {
     if (index >= 0) activeSources.splice(index, 1)
     maybeEndPlayback()
   }
-  return true
 }
 
 async function fetchSse(
@@ -360,7 +363,17 @@ function startFeed(id: string): void {
   state.value = 'playing'
   speakingId.value = id
   error.value = ''
-  session = { id, consumed: 0, buffer: '', finished: false, chain: Promise.resolve() }
+  session = {
+    id,
+    consumed: 0,
+    buffer: '',
+    finished: false,
+    chain: Promise.resolve(),
+    sentFirst: false,
+    utterance: '',
+    utteranceSentences: 0,
+    utteranceStart: 0
+  }
 }
 
 function pushSynth(s: FeedSession, text: string): void {
@@ -380,12 +393,11 @@ function pushSynth(s: FeedSession, text: string): void {
 }
 
 /**
- * Synthesize one sentence. Frames are played as they arrive through the Web
- * Audio engine; in fallback mode they are buffered and replayed as a clip.
+ * Synthesize one text chunk via the v2 TTS service (/api/tts/stream). The
+ * whole MP3 is buffered, decoded once and played — a gapless one-shot replay.
  */
 async function streamSentence(text: string): Promise<void> {
   const chunks: Uint8Array[] = []
-  let scheduleChain: Promise<void> = Promise.resolve()
   const ctrl = new AbortController()
   abortCtrl = ctrl
   let failed = false
@@ -407,29 +419,33 @@ async function streamSentence(text: string): Promise<void> {
           failed = true
           return
         }
-        if (!event.audio) return
-        scheduleChain = scheduleChain.then(async () => {
-          if (engine === 'webaudio') {
-            const scheduled = await scheduleFrame(event.audio as string)
-            if (!scheduled) chunks.push(base64ToBytes(event.audio as string))
-          } else {
-            chunks.push(base64ToBytes(event.audio as string))
-          }
-        })
+        if (event.audio) chunks.push(base64ToBytes(event.audio))
       },
       onError(message) {
         error.value = message
         failed = true
       },
       onClose() {
-        // stream complete; scheduleChain finishes below
+        // all frames received
       }
     }
   )
 
-  await scheduleChain
-  if (failed || engine !== 'fallback' || chunks.length === 0) return
-  const blob = new Blob([concatBytes(chunks)], { type: 'audio/mpeg' })
+  if (failed || chunks.length === 0) return
+  const bytes = concatBytes(chunks)
+  if (engine === 'webaudio') {
+    const ctx = ensureAudioContext()
+    if (ctx && engine === 'webaudio') {
+      try {
+        const buffer = await decodeAudioData(ctx, toArrayBuffer(bytes))
+        if (session) playBuffer(buffer)
+        return
+      } catch {
+        switchToFallback()
+      }
+    }
+  }
+  const blob = new Blob([bytes], { type: 'audio/mpeg' })
   clipQueue.push({ url: URL.createObjectURL(blob) })
   playNext()
 }
@@ -474,7 +490,8 @@ function maybeEndPlayback(): void {
   if (session && session.finished) stop()
 }
 
-/** Feed newly arrived text for `id`; complete sentences are synthesized on the fly. */
+/** Feed newly arrived text for `id`; the first sentence is synthesized right
+ * away, later sentences are grouped into utterances and flushed in batches. */
 function pushText(id: string, content: string): void {
   if (!settings.autoRead) return
   if (!session || session.id !== id) startFeed(id)
@@ -486,8 +503,35 @@ function pushText(id: string, content: string): void {
   const { sentences, rest } = extractSentences(s.buffer)
   s.buffer = rest
   for (const sentence of sentences) {
-    pushSynth(s, cleanTtsText(sentence))
+    const clean = cleanTtsText(sentence)
+    if (!clean) continue
+    if (!s.sentFirst) {
+      s.sentFirst = true
+      pushSynth(s, clean)
+      continue
+    }
+    if (s.utteranceSentences === 0) s.utteranceStart = Date.now()
+    s.utterance += clean
+    s.utteranceSentences += 1
+    if (shouldFlushUtterance(s)) flushUtterance(s)
   }
+}
+
+function shouldFlushUtterance(s: FeedSession): boolean {
+  if (s.utteranceSentences >= UTTERANCE_MIN_SENTENCES) return true
+  if (byteLength(s.utterance) >= UTTERANCE_MAX_BYTES) return true
+  return (
+    s.utteranceStart > 0 &&
+    Date.now() - s.utteranceStart >= UTTERANCE_MAX_WAIT_MS
+  )
+}
+
+function flushUtterance(s: FeedSession): void {
+  if (!s.utterance) return
+  pushSynth(s, s.utterance)
+  s.utterance = ''
+  s.utteranceSentences = 0
+  s.utteranceStart = 0
 }
 
 /** Flush the trailing partial text once the reply is complete. */
@@ -495,11 +539,18 @@ function finish(id: string): void {
   if (!session || session.id !== id) return
   const s = session
   s.finished = true
-  const rest = s.buffer.trim()
+  const rest = cleanTtsText(s.buffer)
+  s.buffer = ''
   if (rest) {
-    s.buffer = ''
-    pushSynth(s, cleanTtsText(rest))
+    if (!s.sentFirst) {
+      s.sentFirst = true
+      pushSynth(s, rest)
+    } else {
+      s.utterance += rest
+      s.utteranceSentences += 1
+    }
   }
+  flushUtterance(s)
   maybeEndPlayback()
 }
 

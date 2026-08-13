@@ -33,7 +33,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
 async def chat_stream(req: ChatStreamRequest) -> StreamingResponse:
     async def event_stream() -> AsyncIterator[str]:
         try:
-            async for event in chat_service.stream_answer(req.message, req.conversation_id):
+            async for event in chat_service.stream_answer(
+                req.message, req.conversation_id
+            ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         except asyncio.CancelledError:

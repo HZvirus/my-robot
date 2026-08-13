@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { BaseButton, LoadingSpinner } from '@my-robot/ui'
+import { BaseButton, LoadingSpinner, useSpeech } from '@my-robot/ui'
 import TypewriterText from '@/components/TypewriterText.vue'
 import { useCompanionStore } from '@/stores/companion'
 
 const route = useRoute()
 const router = useRouter()
 const store = useCompanionStore()
+const speech = useSpeech()
 
 const input = ref('')
 const listEl = ref<HTMLElement | null>(null)
@@ -130,6 +131,14 @@ watch(
           >
             （已中断）
           </span>
+          <button
+            v-if="m.role === 'assistant' && m.content"
+            class="replay-btn"
+            :class="{ active: speech.isActive(m.id) }"
+            @click="speech.toggle(m.id, m.content)"
+          >
+            {{ speech.isActive(m.id) ? (speech.isPlaying(m.id) ? '停止' : '继续') : '重播' }}
+          </button>
         </div>
       </div>
 
@@ -331,6 +340,24 @@ watch(
   color: #c0c4cc;
   font-size: 12px;
   margin-left: 6px;
+}
+
+.replay-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  border: 1px solid #67c23a;
+  background: #fff;
+  color: #3f9e4d;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.replay-btn.active {
+  background: #67c23a;
+  color: #fff;
 }
 
 .error {

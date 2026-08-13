@@ -2,7 +2,8 @@
 
 Implements the v2 TTS protocol:
 - HMAC-SHA256 signed handshake URL (per-request, date-dependent)
-- UTF-8 text split into frames of at most 8000 bytes
+- the whole text is sent in ONE frame (status=2); the v2 API does not accept
+  incremental multi-frame text
 - `aue=lame` (MP3) audio frames returned over the same WebSocket
 """
 
@@ -24,7 +25,6 @@ logger = get_logger(__name__)
 
 _IFLYTEK_HOST = "tts-api.xfyun.cn"
 _IFLYTEK_PATH = "/v2/tts"
-_SENTENCE_END = "。！？…；!?;"
 
 
 class TTSService:
@@ -70,50 +70,6 @@ class TTSService:
             f"&date={quote(date)}&host={_IFLYTEK_HOST}"
         )
 
-    @staticmethod
-    def split_text(text: str, max_bytes: int) -> list[str]:
-        """Split text into frames of at most `max_bytes` UTF-8 bytes.
-
-        Prefers cutting at sentence-ending punctuation; falls back to a
-        byte-safe hard cut for sentences longer than the limit.
-        """
-        if not text:
-            return []
-        if len(text.encode("utf-8")) <= max_bytes:
-            return [text]
-
-        sentences: list[str] = []
-        buf = ""
-        for ch in text:
-            buf += ch
-            if ch in _SENTENCE_END:
-                sentences.append(buf)
-                buf = ""
-        if buf:
-            sentences.append(buf)
-
-        frames: list[str] = []
-        current = ""
-        for sentence in sentences:
-            if (
-                current
-                and len(current.encode("utf-8")) + len(sentence.encode("utf-8"))
-                <= max_bytes
-            ):
-                current += sentence
-                continue
-            if current:
-                frames.append(current)
-                current = ""
-            while len(sentence.encode("utf-8")) > max_bytes:
-                cut = _truncate_to_bytes(sentence, max_bytes)
-                frames.append(cut)
-                sentence = sentence[len(cut) :]
-            current = sentence
-        if current:
-            frames.append(current)
-        return frames
-
     async def synthesize(
         self,
         text: str,
@@ -122,35 +78,44 @@ class TTSService:
         volume: int = 50,
         pitch: int = 50,
     ) -> AsyncIterator[bytes]:
-        """Stream MP3 audio bytes for `text`, yielding chunks as they arrive."""
+        """Synthesize the whole `text` in one request and stream back MP3 audio.
+
+        The text is sent as a single frame (status=2). Text longer than the
+        API limit is truncated to `IFLYTEK_TTS_MAX_BYTES` bytes instead of
+        being split across multiple requests.
+        """
         if not self.configured:
             raise RuntimeError("iFlytek TTS is not configured")
 
-        frames = self.split_text(text, settings.IFLYTEK_TTS_MAX_BYTES)
+        max_bytes = settings.IFLYTEK_TTS_MAX_BYTES
+        if len(text.encode("utf-8")) > max_bytes:
+            logger.warning(
+                "tts text too long (%d bytes), truncating to %d bytes",
+                len(text.encode("utf-8")),
+                max_bytes,
+            )
+            text = _truncate_to_bytes(text, max_bytes)
+
+        request = {
+            "common": {"app_id": self.app_id},
+            "business": {
+                "aue": "lame",
+                "sfl": 1,
+                "tte": "UTF8",
+                "vcn": voice or settings.IFLYTEK_TTS_VOICE,
+                "speed": speed,
+                "volume": volume,
+                "pitch": pitch,
+            },
+            "data": {
+                "status": 2,
+                "text": base64.b64encode(text.encode("utf-8")).decode("ascii"),
+            },
+        }
+
         url = self.build_url()
-
         async with websockets.connect(url) as ws:
-            total = len(frames)
-            for idx, frame in enumerate(frames):
-                status = 2 if total == 1 else (1 if idx == total - 1 else 0)
-                request = {
-                    "common": {"app_id": self.app_id},
-                    "business": {
-                        "aue": "lame",
-                        "sfl": 1,
-                        "tte": "UTF8",
-                        "vcn": voice or settings.IFLYTEK_TTS_VOICE,
-                        "speed": speed,
-                        "volume": volume,
-                        "pitch": pitch,
-                    },
-                    "data": {
-                        "status": status,
-                        "text": base64.b64encode(frame.encode("utf-8")).decode("ascii"),
-                    },
-                }
-                await ws.send(json.dumps(request, ensure_ascii=False))
-
+            await ws.send(json.dumps(request, ensure_ascii=False))
             while True:
                 raw = await ws.recv()
                 message = json.loads(raw)
