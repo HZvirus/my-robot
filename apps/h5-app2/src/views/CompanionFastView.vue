@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BaseButton, LoadingSpinner } from '@my-robot/ui'
-import { useSmartTtsWs } from '@/composables/useSmartTtsWs'
 import { useSmartTts } from '@/composables/useSmartTts'
 import TypewriterText from '@/components/TypewriterText.vue'
 import { useCompanionStore } from '@/stores/companion'
@@ -10,7 +9,7 @@ import { useCompanionStore } from '@/stores/companion'
 const route = useRoute()
 const router = useRouter()
 const store = useCompanionStore()
-const speech = useSmartTtsWs()
+const speech = useSmartTts()
 
 const input = ref('')
 const listEl = ref<HTMLElement | null>(null)
@@ -76,9 +75,8 @@ watch(
   }
 )
 
-// 离开页面时恢复 SSE 转发传输层，避免影响其他页面
+// 离开页面时停止播报（传输层由路由 meta 驱动，无需手动恢复）
 onBeforeUnmount(() => {
-  useSmartTts()
   speech.stop()
 })
 </script>

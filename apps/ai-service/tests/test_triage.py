@@ -130,7 +130,7 @@ def test_split_invalid_args() -> None:
 
 async def test_stream_answer_event_sequence_and_persist(session_factory) -> None:
     service = _make_service(FakeOllamaClient(deltas=["消化", "内科"]), session_factory)
-    events = [event async for event in service.stream_answer("肚子疼挂什么科", None)]
+    events = [event async for event in service.stream_answer("肚子疼挂什么科", None, "user-1")]
 
     assert "conversationId" in events[0]
     assert events[1]["sources"] == [
@@ -139,7 +139,7 @@ async def test_stream_answer_event_sequence_and_persist(session_factory) -> None
     assert [e for e in events if "delta" in e] == [{"delta": "消化"}, {"delta": "内科"}]
     assert events[-1] == {"done": True}
 
-    history = service.get_history(events[0]["conversationId"])
+    history = service.get_history(events[0]["conversationId"], "user-1")
     assert [m.role for m in history.messages] == ["user", "assistant"]
     assert history.messages[0].content == "肚子疼挂什么科"
     assert history.messages[1].content == "消化内科"
@@ -150,9 +150,9 @@ async def test_stream_answer_includes_history(session_factory) -> None:
     client = FakeOllamaClient(deltas=["好"])
     service = _make_service(client, session_factory)
     conv_id = "conv-1"
-    async for _ in service.stream_answer("第一次", conv_id):
+    async for _ in service.stream_answer("第一次", conv_id, "user-1"):
         pass
-    async for _ in service.stream_answer("第二次", conv_id):
+    async for _ in service.stream_answer("第二次", conv_id, "user-1"):
         pass
 
     assert len(client.chat_calls) == 2
@@ -168,11 +168,11 @@ async def test_stream_answer_cancel_persists_partial(session_factory) -> None:
     service = _make_service(CancellingClient(deltas=[]), session_factory)
     events: list[dict[str, object]] = []
     with pytest.raises(asyncio.CancelledError):
-        async for event in service.stream_answer("问一个问题", None):
+        async for event in service.stream_answer("问一个问题", None, "user-1"):
             events.append(event)
 
     conv_id = events[0]["conversationId"]
-    history = service.get_history(conv_id)
+    history = service.get_history(conv_id, "user-1")
     assert len(history.messages) == 2
     assert history.messages[1].content == "部分"
     assert history.messages[1].interrupted is True
@@ -181,10 +181,10 @@ async def test_stream_answer_cancel_persists_partial(session_factory) -> None:
 async def test_list_conversations_returns_preview(session_factory) -> None:
     client = FakeOllamaClient(deltas=["回复"])
     service = _make_service(client, session_factory)
-    async for _ in service.stream_answer("我肚子疼", None):
+    async for _ in service.stream_answer("我肚子疼", None, "user-1"):
         pass
 
-    convs = service.list_conversations()
+    convs = service.list_conversations("user-1")
     assert len(convs) == 1
     assert convs[0].preview == "我肚子疼"
 
@@ -221,7 +221,7 @@ def test_resolve_primary_none_when_no_department() -> None:
 async def test_stream_answer_emits_department_events(session_factory) -> None:
     deltas = ["反复腹泻建议挂消化内科。", " 若腹痛剧烈请到急诊科。"]
     service = _make_service(FakeOllamaClient(deltas=deltas), session_factory)
-    events = [event async for event in service.stream_answer("反复腹泻挂什么科", None)]
+    events = [event async for event in service.stream_answer("反复腹泻挂什么科", None, "user-1")]
 
     department_event = next(e for e in events if "department" in e)
     assert department_event["department"]["name"] == "消化内科"
@@ -231,5 +231,5 @@ async def test_stream_answer_emits_department_events(session_factory) -> None:
     ]
     assert events[-1] == {"done": True}
 
-    history = service.get_history(events[0]["conversationId"])
+    history = service.get_history(events[0]["conversationId"], "user-1")
     assert history.messages[1].content == "反复腹泻建议挂消化内科。 若腹痛剧烈请到急诊科。"

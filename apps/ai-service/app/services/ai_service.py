@@ -1,14 +1,14 @@
 from uuid import uuid4
 
 from app.core.logger import get_logger
-from app.services.ollama_client import OllamaClient, ollama_client
+from app.services.llm_client import OpenAICompatClient, llm_client
 
 logger = get_logger(__name__)
 
 
 class AIService:
-    def __init__(self, client: OllamaClient | None = None) -> None:
-        self._client = client or ollama_client
+    def __init__(self, client: OpenAICompatClient | None = None) -> None:
+        self._client = client or llm_client
 
     async def chat(self, message: str, conversation_id: str | None = None) -> tuple[str, str]:
         conv_id = conversation_id or str(uuid4())

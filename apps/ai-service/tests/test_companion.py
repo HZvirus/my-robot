@@ -14,8 +14,8 @@ from app.services.companion_service import CompanionService
 @pytest.fixture()
 def session_factory() -> Iterator[sessionmaker[Session]]:
     engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
+        'sqlite://',
+        connect_args={'check_same_thread': False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
@@ -40,7 +40,7 @@ class FakeOllamaClient:
 class CancellingClient(FakeOllamaClient):
     async def chat_stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         self.chat_calls.append(messages)
-        yield "部分"
+        yield '部分'
         raise asyncio.CancelledError
 
 
@@ -50,7 +50,7 @@ class FailingClient:
 
     async def chat_stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         self.chat_calls.append(messages)
-        raise RuntimeError("boom")
+        raise RuntimeError('boom')
         yield  # pragma: no cover - marks this as an async generator
 
 
@@ -60,77 +60,92 @@ def _make_service(
     return CompanionService(client, session_factory)
 
 
+
 async def test_stream_answer_event_sequence_and_persist(session_factory) -> None:
-    service = _make_service(FakeOllamaClient(deltas=["别", "担心"]), session_factory)
-    events = [event async for event in service.stream_answer("最近压力好大", None)]
+    service = _make_service(FakeOllamaClient(deltas=['别', '担心']), session_factory)
+    events = [event async for event in service.stream_answer('最近压力好大', None, 'user-1')]
 
-    assert "conversationId" in events[0]
-    assert [e for e in events if "delta" in e] == [{"delta": "别"}, {"delta": "担心"}]
-    assert events[-1] == {"done": True}
+    assert 'conversationId' in events[0]
+    assert [e for e in events if 'delta' in e] == [{'delta': '别'}, {'delta': '担心'}]
+    assert events[-1] == {'done': True}
 
-    history = service.get_history(events[0]["conversationId"])
-    assert [m.role for m in history.messages] == ["user", "assistant"]
-    assert history.messages[0].content == "最近压力好大"
-    assert history.messages[1].content == "别担心"
+    history = service.get_history(events[0]['conversationId'], 'user-1')
+    assert [m.role for m in history.messages] == ['user', 'assistant']
+    assert history.messages[0].content == '最近压力好大'
+    assert history.messages[1].content == '别担心'
     assert history.messages[1].interrupted is False
 
 
 async def test_stream_answer_uses_companion_system_prompt(session_factory) -> None:
-    client = FakeOllamaClient(deltas=["我在"])
+    client = FakeOllamaClient(deltas=['我在'])
     service = _make_service(client, session_factory)
-    async for _ in service.stream_answer("你好", None):
+    async for _ in service.stream_answer('你好', None, 'user-1'):
         pass
 
-    assert client.chat_calls[0][0]["role"] == "system"
-    assert "健康陪伴" in client.chat_calls[0][0]["content"]
+    assert client.chat_calls[0][0]['role'] == 'system'
+    assert '健康陪伴' in client.chat_calls[0][0]['content']
 
 
 async def test_stream_answer_includes_history(session_factory) -> None:
-    client = FakeOllamaClient(deltas=["好的"])
+    client = FakeOllamaClient(deltas=['好的'])
     service = _make_service(client, session_factory)
-    conv_id = "conv-1"
-    async for _ in service.stream_answer("第一次", conv_id):
+    conv_id = 'conv-1'
+    async for _ in service.stream_answer('第一次', conv_id, 'user-1'):
         pass
-    async for _ in service.stream_answer("第二次", conv_id):
+    async for _ in service.stream_answer('第二次', conv_id, 'user-1'):
         pass
 
     assert len(client.chat_calls) == 2
-    roles = [m["role"] for m in client.chat_calls[1]]
-    assert roles == ["system", "user", "assistant", "user"]
-    assert client.chat_calls[1][-1]["content"] == "第二次"
-    assert client.chat_calls[1][-2]["content"] == "好的"
+    roles = [m['role'] for m in client.chat_calls[1]]
+    assert roles == ['system', 'user', 'assistant', 'user']
+    assert client.chat_calls[1][-1]['content'] == '第二次'
+    assert client.chat_calls[1][-2]['content'] == '好的'
+
 
 
 async def test_stream_answer_cancel_persists_partial(session_factory) -> None:
     service = _make_service(CancellingClient(deltas=[]), session_factory)
     events: list[dict[str, object]] = []
     with pytest.raises(asyncio.CancelledError):
-        async for event in service.stream_answer("陪我聊聊", None):
+        async for event in service.stream_answer('陪我聊聊', None, 'user-1'):
             events.append(event)
 
-    conv_id = events[0]["conversationId"]
-    history = service.get_history(conv_id)
+    conv_id = events[0]['conversationId']
+    history = service.get_history(conv_id, 'user-1')
     assert len(history.messages) == 2
-    assert history.messages[1].content == "部分"
+    assert history.messages[1].content == '部分'
     assert history.messages[1].interrupted is True
 
 
 async def test_stream_answer_error_yields_error(session_factory) -> None:
     service = _make_service(FailingClient(), session_factory)
-    events = [event async for event in service.stream_answer("在吗", None)]
+    events = [event async for event in service.stream_answer('在吗', None, 'user-1')]
 
-    assert any("error" in e for e in events)
-    assert not any("done" in e for e in events)
-    history = service.get_history(events[0]["conversationId"])
+    assert any('error' in e for e in events)
+    assert not any('done' in e for e in events)
+    history = service.get_history(events[0]['conversationId'], 'user-1')
     assert history.messages[1].interrupted is True
 
 
 async def test_list_conversations_returns_preview(session_factory) -> None:
-    client = FakeOllamaClient(deltas=["加油"])
+    client = FakeOllamaClient(deltas=['加油'])
     service = _make_service(client, session_factory)
-    async for _ in service.stream_answer("今天不想起床", None):
+    async for _ in service.stream_answer('今天不想起床', None, 'user-1'):
         pass
 
-    convs = service.list_conversations()
+    convs = service.list_conversations('user-1')
     assert len(convs) == 1
-    assert convs[0].preview == "今天不想起床"
+    assert convs[0].preview == '今天不想起床'
+
+
+async def test_history_and_stream_reject_foreign_owner(session_factory) -> None:
+    service = _make_service(FakeOllamaClient(deltas=['好']), session_factory)
+    events = [event async for event in service.stream_answer('你好', None, 'user-a')]
+    conv_id = events[0]['conversationId']
+
+    with pytest.raises(KeyError):
+        service.get_history(conv_id, 'user-b')
+
+    events = [event async for event in service.stream_answer('继续', conv_id, 'user-b')]
+    assert events == [{'error': '无权访问该会话'}]
+    assert service.list_conversations('user-b') == []

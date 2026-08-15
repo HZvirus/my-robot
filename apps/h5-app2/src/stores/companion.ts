@@ -6,6 +6,7 @@ import type {
 } from '@my-robot/shared-types'
 import { useSmartTts } from '@/composables/useSmartTts'
 import { streamCompanion } from '@/api/companion'
+import { authFetch } from '@/utils/auth'
 
 /**
  * 全局 TTS 播报实例（模块级单例，供消息朗读使用）。
@@ -37,13 +38,14 @@ export const useCompanionStore = defineStore('companion', () => {
    */
   function makeMessage(role: 'user' | 'assistant', content: string): CompanionMessage {
     return reactive({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
       role,
       content,
       interrupted: false,
       createdAt: new Date().toISOString()
     })
   }
+
 
   /**
    * 发送一条用户消息并流式接收助手回复：
@@ -100,12 +102,13 @@ export const useCompanionStore = defineStore('companion', () => {
     }
   }
 
+
   /**
    * 按会话 ID 加载历史消息，恢复本地聊天视图。
    * 请求失败时静默返回（保持现状）。
    */
   async function loadHistory(id: string): Promise<void> {
-    const resp = await fetch(`/api/companion/history/${encodeURIComponent(id)}`)
+    const resp = await authFetch('/api/companion/history/' + encodeURIComponent(id))
     if (!resp.ok) return
     const data = (await resp.json()) as {
       conversationId: string
@@ -117,7 +120,7 @@ export const useCompanionStore = defineStore('companion', () => {
 
   /** 拉取历史会话列表（侧边栏展示用），失败时返回空数组 */
   async function loadConversations(): Promise<CompanionConversation[]> {
-    const resp = await fetch('/api/companion/conversations')
+    const resp = await authFetch('/api/companion/conversations')
     if (!resp.ok) return []
     return (await resp.json()) as CompanionConversation[]
   }

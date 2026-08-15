@@ -7,6 +7,7 @@ import type {
   TriageSource
 } from '@my-robot/shared-types'
 import { fetchDepartments, streamTriage } from '@/api/triage'
+import { authFetch } from '@/utils/auth'
 
 export const useTriageStore = defineStore('triage', () => {
   const messages = ref<TriageMessage[]>([])
@@ -87,7 +88,7 @@ export const useTriageStore = defineStore('triage', () => {
   }
 
   async function loadHistory(id: string): Promise<void> {
-    const resp = await fetch(`/api/triage/history/${encodeURIComponent(id)}`)
+    const resp = await authFetch('/api/triage/history/' + encodeURIComponent(id))
     if (!resp.ok) return
     const data = (await resp.json()) as {
       conversationId: string
@@ -102,7 +103,7 @@ export const useTriageStore = defineStore('triage', () => {
   }
 
   async function loadConversations(): Promise<TriageConversation[]> {
-    const resp = await fetch('/api/triage/conversations')
+    const resp = await authFetch('/api/triage/conversations')
     if (!resp.ok) return []
     return (await resp.json()) as TriageConversation[]
   }

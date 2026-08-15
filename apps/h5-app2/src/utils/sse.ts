@@ -1,3 +1,5 @@
+import { authFetch } from '@/utils/auth'
+
 export interface SseHandlers<T> {
   onEvent: (event: T) => void
   onError: (message: string) => void
@@ -7,6 +9,7 @@ export interface SseHandlers<T> {
 /**
  * POST a JSON body and consume the SSE response via fetch + ReadableStream.
  * EventSource cannot be used: it is GET-only and cannot send a request body.
+ * 自动附带设备鉴权头（见 utils/auth.ts）。
  */
 export async function readSse<T>(
   url: string,
@@ -15,14 +18,14 @@ export async function readSse<T>(
 ): Promise<void> {
   const { onEvent, onError, onClose } = handlers
   try {
-    const resp = await fetch(url, {
+    const resp = await authFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     })
 
     if (!resp.ok) {
-      onError(`请求失败 (${resp.status})`)
+      onError('请求失败 (' + resp.status + ')')
       onClose()
       return
     }

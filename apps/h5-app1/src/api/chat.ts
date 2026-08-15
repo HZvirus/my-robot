@@ -1,4 +1,3 @@
-import axios from 'axios'
 import type {
   ChatRequest,
   ChatResponse,
@@ -6,11 +5,17 @@ import type {
 } from '@my-robot/shared-types'
 import { readSse } from '@/utils/sse'
 import type { SseHandlers } from '@/utils/sse'
-
-const http = axios.create({ baseURL: '/api' })
+import { authFetch } from '@/utils/auth'
 
 export function chat(req: ChatRequest): Promise<ChatResponse> {
-  return http.post<ChatResponse>('/chat', req).then((r) => r.data)
+  return authFetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req)
+  }).then(async (resp) => {
+    if (!resp.ok) throw new Error('请求失败 (' + resp.status + ')')
+    return (await resp.json()) as ChatResponse
+  })
 }
 
 export function streamChat(

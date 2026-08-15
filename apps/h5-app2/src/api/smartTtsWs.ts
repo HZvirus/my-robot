@@ -4,6 +4,7 @@ import type {
   SmartTtsStreamTextOptions,
   SmartTtsTextStreamClient
 } from '@/api/smartTts'
+import { authFetch } from '@/utils/auth'
 
 /** 后端签名下发的 WebSocket 地址（含本次会话所需的 app_id） */
 interface SmartTtsWsUrl {
@@ -148,7 +149,7 @@ export function streamSmartTtsWs(
 
   /** 请求后端签名下发的 WebSocket 直连地址 */
   async function resolveWsUrl(): Promise<SmartTtsWsUrl> {
-    const resp = await fetch('/api/smart-tts/ws-url', {
+    const resp = await authFetch('/api/smart-tts/ws-url', {
       signal: abortCtrl.signal
     })
     if (!resp.ok) {

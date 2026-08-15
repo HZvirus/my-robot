@@ -1,13 +1,13 @@
-"""Embedding helper wrapping :class:`OllamaClient` with optional single-text caching."""
+"""Embedding helper wrapping :class:`OpenAICompatClient` with optional single-text caching."""
 
 from collections.abc import Sequence
 
-from app.services.ollama_client import OllamaClient, ollama_client
+from app.services.llm_client import OpenAICompatClient, embed_client
 
 
 class EmbeddingService:
-    def __init__(self, client: OllamaClient | None = None, cache_size: int = 256) -> None:
-        self._client = client or ollama_client
+    def __init__(self, client: OpenAICompatClient | None = None, cache_size: int = 256) -> None:
+        self._client = client or embed_client
         self._cache_size = cache_size
         self._cache: dict[str, list[float]] = {}
 

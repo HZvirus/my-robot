@@ -1,5 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** TTS 流式合成传输层：ws-direct = 浏览器直连讯飞；缺省走后端 WS 桥接 */
+    ttsTransport?: 'ws-direct'
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -21,6 +28,7 @@ const router = createRouter({
     {
       path: '/companion/fast',
       name: 'companion-fast',
+      meta: { ttsTransport: 'ws-direct' },
       component: () => import('@/views/CompanionFastView.vue')
     },
     {

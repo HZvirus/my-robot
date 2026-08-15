@@ -2,6 +2,8 @@ import { reactive, ref, watch } from 'vue'
 import { cleanTtsText } from '@my-robot/ui'
 
 import { streamSmartTtsText } from '@/api/smartTts'
+import { streamSmartTtsWs } from '@/api/smartTtsWs'
+import router from '@/router'
 import type {
   SmartTtsStreamEvent,
   SmartTtsStreamHandlers,
@@ -9,18 +11,22 @@ import type {
   SmartTtsTextStreamClient
 } from '@/api/smartTts'
 
-/** 流式合成传输层：决定音频经后端 SSE 转发还是浏览器 WebSocket 直连 */
+/** 流式合成传输层：决定音频经后端 WS 桥接还是浏览器直连讯飞 */
 type SmartTtsTransport = (
   options: SmartTtsStreamTextOptions,
   handlers: SmartTtsStreamHandlers
 ) => SmartTtsTextStreamClient
 
-/** 当前使用的传输层（模块级单例，可被 useSmartTtsWs 切换到 WebSocket 直连） */
-let smartTtsTransport: SmartTtsTransport = streamSmartTtsText
-
-/** 切换流式合成传输层（默认 SSE 转发，可由 useSmartTtsWs 切换到直连） */
-export function setSmartTtsTransport(transport: SmartTtsTransport): void {
-  smartTtsTransport = transport
+/**
+ * 按当前路由 meta.ttsTransport 选择传输层：
+ * - 'ws-direct'：快速版页面，浏览器直连讯飞（延迟最低）
+ * - 默认：经后端 WS 桥接（不暴露讯飞凭据）
+ * 每次发起合成时解析，导航后自动切换，无需组件卸载时手动恢复。
+ */
+function resolveTransport(): SmartTtsTransport {
+  return router.currentRoute.value.meta.ttsTransport === 'ws-direct'
+    ? streamSmartTtsWs
+    : streamSmartTtsText
 }
 
 /**
@@ -671,7 +677,7 @@ function pushText(id: string, content: string): void {
   const clean = cleanTtsText(fresh)
   if (!clean) return
   if (!s.client) {
-    s.client = smartTtsTransport(
+    s.client = resolveTransport()(
       {
         voice: settings.voice,
         speed: settings.speed,
@@ -730,7 +736,7 @@ function speak(id: string, text: string): void {
   s.finished = true
   const clean = cleanTtsText(text)
   if (clean) {
-    s.client = smartTtsTransport(
+    s.client = resolveTransport()(
       {
         voice: settings.voice,
         speed: settings.speed,
@@ -842,8 +848,7 @@ export const smartTtsApi = {
   isPlaying
 }
 
-/** 组合式函数入口：默认使用 SSE 转发传输层 */
+/** 组合式函数入口：返回共享播放 API（传输层由路由 meta 决定） */
 export function useSmartTts() {
-  setSmartTtsTransport(streamSmartTtsText)
   return smartTtsApi
 }

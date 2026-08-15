@@ -53,6 +53,21 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str = "qwen2.5:7b"
     OLLAMA_EMBED_MODEL: str = "bge-m3"
     OLLAMA_TIMEOUT: float = 120.0
+
+    # --- LLM backend (OpenAI-compatible: Ollama / vLLM / Aliyun DashScope / ...) ---
+    # Leave LLM_* empty to fall back to OLLAMA_* (local dev on Ollama).
+    LLM_BASE_URL: str = ""
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = ""
+    LLM_TIMEOUT: float = 0.0  # 0 -> fall back to OLLAMA_TIMEOUT
+
+    # --- Embedding backend (OpenAI-compatible) ---
+    # Leave EMBED_* empty to fall back to OLLAMA_*.
+    EMBED_BASE_URL: str = ""
+    EMBED_API_KEY: str = ""
+    EMBED_MODEL: str = ""
+    EMBED_TIMEOUT: float = 0.0
+
     EMBEDDING_DIM: int = 1024
     CHROMA_PERSIST_DIR: str = "./data/chroma"
     CHROMA_COLLECTION: str = "hospital_kb"

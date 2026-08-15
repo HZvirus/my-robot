@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { ChatConversation, ChatMessage } from '@my-robot/shared-types'
 import { useSpeech } from '@my-robot/ui'
 import { streamChat } from '@/api/chat'
+import { authFetch } from '@/utils/auth'
 
 const speech = useSpeech()
 
@@ -63,7 +64,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadHistory(id: string): Promise<void> {
-    const resp = await fetch(`/api/chat/history/${encodeURIComponent(id)}`)
+    const resp = await authFetch('/api/chat/history/' + encodeURIComponent(id))
     if (!resp.ok) return
     const data = (await resp.json()) as {
       conversationId: string
@@ -74,7 +75,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadConversations(): Promise<ChatConversation[]> {
-    const resp = await fetch('/api/chat/conversations')
+    const resp = await authFetch('/api/chat/conversations')
     if (!resp.ok) return []
     return (await resp.json()) as ChatConversation[]
   }
