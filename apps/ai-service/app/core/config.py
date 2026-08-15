@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     SCIENCE_TOPIC_SIM_THRESHOLD: float = 0.51
     # Number of recent messages (user+assistant) forming the topic vector.
     SCIENCE_TOPIC_WINDOW: int = 4
+    # Weight of user messages vs assistant replies in the topic vector.
+    SCIENCE_TOPIC_USER_WEIGHT: float = 0.6
+    # Exponential decay per position; the newest message keeps the most weight.
+    SCIENCE_TOPIC_DECAY: float = 0.9
 
     # --- iFlytek TTS (voice read-aloud, v2 online TTS) ---
     IFLYTEK_APP_ID: str = ""

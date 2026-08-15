@@ -112,15 +112,25 @@ class ScienceService:
             yield {'done': True}
 
     async def _load_topic_vector(self, history: list[dict[str, str]]):
-        # Average embedding of the most recent messages = current topic centroid.
-        recent = [m['content'] for m in history[-settings.SCIENCE_TOPIC_WINDOW:]]
+        # Weighted topic centroid: user messages carry more intent than assistant
+        # replies, and more recent messages decay less.
+        recent = [m for m in history[-settings.SCIENCE_TOPIC_WINDOW:]]
         if not recent:
             return None
-        vectors = await embedding_service.embed(recent)
+        vectors = await embedding_service.embed([m['content'] for m in recent])
         if not vectors:
             return None
         n, dim = len(vectors), len(vectors[0])
-        return [sum(v[i] for v in vectors) / n for i in range(dim)]
+        topic = [0.0] * dim
+        total = 0.0
+        for i, v in enumerate(vectors):
+            role_w = settings.SCIENCE_TOPIC_USER_WEIGHT if recent[i]['role'] == 'user' else (1.0 - settings.SCIENCE_TOPIC_USER_WEIGHT)
+            decay = settings.SCIENCE_TOPIC_DECAY ** (n - 1 - i)
+            w = role_w * decay
+            total += w
+            for d in range(dim):
+                topic[d] += v[d] * w
+        return [x / total for x in topic]
 
     async def _is_new_topic(self, message: str, history: list[dict[str, str]]):
         # True when the message drifts away from the conversation topic.
