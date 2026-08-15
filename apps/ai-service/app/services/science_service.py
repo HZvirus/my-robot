@@ -21,6 +21,7 @@ from app.models.science import (
     ScienceMessageOut,
 )
 from app.services.llm_client import OpenAICompatClient
+from app.services.embedding import embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,15 @@ SYSTEM_PROMPT = (
     '- 涉及医学、健康、用药等话题时，明确提示仅作科普参考，不替代专业诊疗，必要时建议咨询医生。'
     '- 引导孩子式的好奇心，鼓励追问，不嘲笑任何问题。'
 )
+
+
+def _cosine_similarity(a: list[float], b: list[float]):
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if not norm_a or not norm_b:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 
 class ScienceService:
@@ -48,12 +58,28 @@ class ScienceService:
         self, message: str, conversation_id: str | None, owner_id: str
     ) -> AsyncIterator[dict[str, Any]]:
         conv_id = conversation_id or str(uuid4())
+        history: list[dict[str, str]] = []
+        if conversation_id:
+            history = await to_thread.run_sync(self._load_history, conversation_id)
+            try:
+                # Topic-drift detection: start a fresh conversation when the new
+                # message is semantically unrelated to the recent context.
+                if await self._is_new_topic(message, history):
+                    conv_id = str(uuid4())
+                    history = []
+            except Exception:
+                logger.warning(
+                    'topic detection failed, keep current conversation',
+                    exc_info=True,
+                )
+
         try:
             await to_thread.run_sync(partial(self._ensure_conversation, conv_id, owner_id))
         except PermissionError:
             yield {'error': '无权访问该会话'}
             return
-        history = await to_thread.run_sync(self._load_history, conv_id)
+        if not history:
+            history = await to_thread.run_sync(self._load_history, conv_id)
 
         yield {'conversationId': conv_id}
 
@@ -84,6 +110,31 @@ class ScienceService:
                 partial(self._persist, conv_id, message, ''.join(parts), False)
             )
             yield {'done': True}
+
+    async def _load_topic_vector(self, history: list[dict[str, str]]):
+        # Average embedding of the most recent messages = current topic centroid.
+        recent = [m['content'] for m in history[-settings.SCIENCE_TOPIC_WINDOW:]]
+        if not recent:
+            return None
+        vectors = await embedding_service.embed(recent)
+        if not vectors:
+            return None
+        n, dim = len(vectors), len(vectors[0])
+        return [sum(v[i] for v in vectors) / n for i in range(dim)]
+
+    async def _is_new_topic(self, message: str, history: list[dict[str, str]]):
+        # True when the message drifts away from the conversation topic.
+        topic = await self._load_topic_vector(history)
+        if topic is None:
+            return False
+        vec = await embedding_service.embed_one(message)
+        sim = _cosine_similarity(vec, topic)
+        logger.info(
+            'science topic sim=%.3f new_topic=%s',
+            sim,
+            sim < settings.SCIENCE_TOPIC_SIM_THRESHOLD,
+        )
+        return sim < settings.SCIENCE_TOPIC_SIM_THRESHOLD
 
     def _build_messages(
         self, message: str, history: list[dict[str, str]]

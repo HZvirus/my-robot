@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     # --- Science (popular-science encyclopedia chat, streaming) ---
     SCIENCE_MAX_HISTORY: int = 12
+    # Topic-drift detection: cosine similarity below this value against the
+    # conversation topic vector starts a fresh conversation.
+    SCIENCE_TOPIC_SIM_THRESHOLD: float = 0.51
+    # Number of recent messages (user+assistant) forming the topic vector.
+    SCIENCE_TOPIC_WINDOW: int = 4
 
     # --- iFlytek TTS (voice read-aloud, v2 online TTS) ---
     IFLYTEK_APP_ID: str = ""
