@@ -51,6 +51,12 @@ onMounted(async () => {
       >
         健康陪伴快速版 · WebSocket 直连
       </button>
+      <button
+        class="smart-btn"
+        @click="router.push('/science')"
+      >
+        科普百科助手 · 把知识讲明白
+      </button>
       <p class="hero-tip">
         健康科普与陪伴，不替代专业医疗诊断
       </p>

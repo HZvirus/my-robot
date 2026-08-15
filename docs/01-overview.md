@@ -8,9 +8,10 @@
 | --- | --- | --- | --- |
 | 通用聊天 | `ChatService`（`services/chat_service.py`） | `/api/chat/stream` | 通用系统提示词，仅带历史上下文 |
 | 健康陪伴 | `CompanionService`（`services/companion_service.py`） | `/api/companion/chat` | 暖心理人设「小安」，含急重症提醒 |
+| 科普百科 | `ScienceService`（`services/science_service.py`） | `/api/science/chat` | 人设「小科」，通俗科普讲解，纯文本无语音 |
 | 智能导诊 | `TriageService`（`services/triage_service.py`） | `/api/triage/chat` | RAG：检索知识库 → 注入上下文 → 推荐科室 |
 
-三个服务结构高度一致：`stream_answer()` 均为异步生成器，按固定顺序产出 SSE 事件 dict，流结束后把「用户 + 助手」两条消息落库。
+四个服务结构高度一致：`stream_answer()` 均为异步生成器，按固定顺序产出 SSE 事件 dict，流结束后把「用户 + 助手」两条消息落库。
 
 此外还有：
 
@@ -23,7 +24,7 @@
 apps/ai-service/
 ├── app/
 │   ├── main.py                 # FastAPI 入口：lifespan 建表、挂载路由、CORS
-│   ├── api/routes/             # chat / companion / triage / tts / profile
+│   ├── api/routes/             # chat / companion / science / triage / tts / profile
 │   ├── services/               # 业务与 AI 逻辑（见上表）
 │   ├── models/                 # Pydantic DTO（camelCase 别名）
 │   ├── db/
@@ -44,9 +45,10 @@ apps/ai-service/
 ## 3. 配置项（`app/core/config.py` 与 `.env`）
 
 ```ini
-# 通用聊天 / 健康陪伴的历史条数上限
+# 通用聊天 / 健康陪伴 / 科普百科的历史条数上限
 CHAT_MAX_HISTORY=10
 COMPANION_MAX_HISTORY=12
+SCIENCE_MAX_HISTORY=12
 
 # 讯飞 TTS
 IFLYTEK_APP_ID=...
@@ -76,7 +78,7 @@ TRIAGE_CHUNK_OVERLAP=80
 
 ## 4. SSE 事件协议
 
-所有流式接口（chat/companion/triage/tts）统一用 **POST + SSE** 返回，浏览器端不能用 `EventSource`（GET-only），改用 `fetch` + `ReadableStream` 解析（见 [05-frontend-streaming.md](./05-frontend-streaming.md)）。
+所有流式接口（chat/companion/science/triage/tts）统一用 **POST + SSE** 返回，浏览器端不能用 `EventSource`（GET-only），改用 `fetch` + `ReadableStream` 解析（见 [05-frontend-streaming.md](./05-frontend-streaming.md)）。
 
 帧格式：`data: {json}\n\n`，结束帧 `data: [DONE]\n\n`。
 
@@ -110,6 +112,6 @@ data: [DONE]
 `Conversation`（id、created_at）与 `Message`（id、conversation_id、role、content、sources JSON、interrupted、created_at）共用同一张表：
 
 - 每轮结束时写入 user + assistant 两条记录；导诊的 `sources` 会随 assistant 记录一起保存。
-- 历史按 `created_at` 倒序取最近 N 条（`TRIAGE_MAX_HISTORY` / `CHAT_MAX_HISTORY` / `COMPANION_MAX_HISTORY`），再反转为正序拼入上下文。
+- 历史按 `created_at` 倒序取最近 N 条（`TRIAGE_MAX_HISTORY` / `CHAT_MAX_HISTORY` / `COMPANION_MAX_HISTORY` / `SCIENCE_MAX_HISTORY`），再反转为正序拼入上下文。
 - 同一轮 user/assistant 的 `created_at` 相差 1 微秒，保证取历史时顺序稳定。
 - 表结构在应用启动时由 `Base.metadata.create_all(bind=engine)` 创建（`main.py` lifespan）。

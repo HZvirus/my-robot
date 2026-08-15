@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BaseButton, LoadingSpinner } from '@my-robot/ui'
-import { useSmartTts } from '@/composables/useSmartTts'
 import TypewriterText from '@/components/TypewriterText.vue'
-import VoiceInputButton from '@/components/VoiceInputButton.vue'
-import { useCompanionStore } from '@/stores/companion'
+import { useScienceStore } from '@/stores/science'
 
 const route = useRoute()
 const router = useRouter()
-const store = useCompanionStore()
-const speech = useSmartTts()
+const store = useScienceStore()
 
 const input = ref('')
 const listEl = ref<HTMLElement | null>(null)
-const voiceInputRef = ref<InstanceType<typeof VoiceInputButton> | null>(null)
 
 const id = typeof route.query.id === 'string' ? route.query.id : null
 if (id) {
@@ -29,40 +25,18 @@ const activeAssistantId = computed(() => {
   return null
 })
 
-const voiceStateText = computed(() => {
-  if (speech.state.value === 'playing') return '语音朗读中'
-  if (speech.state.value === 'paused') return '已暂停朗读'
-  return '语音就绪 · 直连'
-})
-
 const quickPrompts = [
-  '最近工作压力很大，陪我聊聊好吗',
-  '晚上总睡不好，有什么放松的方法',
-  '帮我推荐一份一日三餐的健康搭配',
-  '今天情绪很低落，想听你开导我'
+  '彩虹是怎么形成的？',
+  '人为什么要睡觉？',
+  '恐龙是怎么灭绝的？',
+  '黑洞到底有多可怕？'
 ]
-
-function pickVoice(value: string) {
-  speech.settings.voice = value
-  if (speech.state.value !== 'idle') {
-    const last = store.messages[store.messages.length - 1]
-    if (last && last.role === 'assistant' && last.content) {
-      speech.toggle(last.id, last.content)
-    }
-  }
-}
 
 function send() {
   const text = input.value.trim()
   if (!text || store.streaming) return
   input.value = ''
-  voiceInputRef.value?.stop()
   store.send(text)
-}
-
-function sendVoice(text: string) {
-  input.value = text
-  send()
 }
 
 function useQuick(prompt: string) {
@@ -73,7 +47,6 @@ function useQuick(prompt: string) {
 function newChat() {
   store.reset()
   input.value = ''
-  voiceInputRef.value?.stop()
 }
 
 watch(
@@ -83,11 +56,6 @@ watch(
     listEl.value?.scrollTo({ top: listEl.value.scrollHeight })
   }
 )
-
-// 离开页面时停止播报（传输层由路由 meta 驱动，无需手动恢复）
-onBeforeUnmount(() => {
-  speech.stop()
-})
 </script>
 
 <template>
@@ -101,53 +69,20 @@ onBeforeUnmount(() => {
         ‹
       </button>
       <div class="header-title">
-        <span class="avatar">安</span>
+        <span class="avatar">科</span>
         <div class="title-text">
-          <span class="chat-title">小安 · 健康陪伴快速版</span>
-          <span class="chat-subtitle">讯飞超拟人 · WebSocket 直连</span>
+          <span class="chat-title">小科 · 科普百科</span>
+          <span class="chat-subtitle">把复杂知识讲得简单明白</span>
         </div>
       </div>
-      <div class="header-actions">
-        <span
-          class="voice-pill"
-          :class="speech.state.value"
-        >
-          {{ voiceStateText }}
-        </span>
-        <button
-          class="new-btn"
-          :disabled="store.streaming"
-          @click="newChat"
-        >
-          新对话
-        </button>
-      </div>
+      <button
+        class="new-btn"
+        :disabled="store.streaming"
+        @click="newChat"
+      >
+        新对话
+      </button>
     </header>
-
-    <div class="voice-panel">
-      <div class="voice-row">
-        <span class="voice-label">超拟人音色</span>
-        <div class="voice-chips">
-          <button
-            v-for="v in speech.voices"
-            :key="v.value"
-            class="voice-chip"
-            :class="{ active: speech.settings.voice === v.value }"
-            :title="v.label"
-            @click="pickVoice(v.value)"
-          >
-            {{ v.label.split('（')[0] }}
-          </button>
-        </div>
-      </div>
-      <label class="auto-read">
-        <span>自动朗读回复</span>
-        <input
-          v-model="speech.settings.autoRead"
-          type="checkbox"
-        >
-      </label>
-    </div>
 
     <div
       ref="listEl"
@@ -157,8 +92,9 @@ onBeforeUnmount(() => {
         v-if="store.messages.length === 0"
         class="welcome"
       >
-        你好呀，我是小安。快速版的我通过 WebSocket 直连讯飞超拟人语音，
-        回复更快更自然——你的每句话我都会认真听，也会温柔地读给你听。
+        你好呀，我是小科。天文地理、动物植物、物理化学……
+        任何让你好奇的问题都可以问我，我会用简单的话把背后的原理讲给你听。
+        想了解什么，直接告诉我吧！
       </p>
 
       <div
@@ -170,7 +106,7 @@ onBeforeUnmount(() => {
         <span
           v-if="m.role === 'assistant'"
           class="bubble-avatar"
-        >安</span>
+        >科</span>
         <div class="bubble">
           <div
             v-if="m.content"
@@ -190,25 +126,11 @@ onBeforeUnmount(() => {
             :size="18"
           />
           <span
-            v-if="m.role === 'assistant' && speech.isPlaying(m.id)"
-            class="speaking"
-          >
-            ● 正在朗读
-          </span>
-          <span
             v-if="m.interrupted && m.role === 'assistant'"
             class="interrupted"
           >
             （已中断）
           </span>
-          <button
-            v-if="m.role === 'assistant' && m.content"
-            class="replay-btn"
-            :class="{ active: speech.isActive(m.id) }"
-            @click="speech.toggle(m.id, m.content)"
-          >
-            {{ speech.isActive(m.id) ? (speech.isPlaying(m.id) ? '停止' : '继续') : '重播' }}
-          </button>
         </div>
       </div>
 
@@ -240,26 +162,20 @@ onBeforeUnmount(() => {
         v-model="input"
         class="input"
         :disabled="store.streaming"
-        placeholder="和小安快速版聊聊…"
+        placeholder="想科普点什么…"
         @keyup.enter="send"
       >
-      <VoiceInputButton
-        ref="voiceInputRef"
-        v-model="input"
-        :disabled="store.streaming"
-        @commit="sendVoice"
-      />
       <BaseButton
         type="primary"
         :disabled="!input.trim() || store.streaming"
         @click="send"
       >
-        {{ store.streaming ? '陪伴中' : '发送' }}
+        {{ store.streaming ? '讲解中' : '发送' }}
       </BaseButton>
     </footer>
 
     <p class="disclaimer">
-      小安快速版是 AI 健康陪伴助手，不提供医疗诊断。如有紧急症状请立即就医或拨打 120。
+      小科是 AI 科普助手，内容供参考。涉及医学健康话题时，请以专业医生意见为准。
     </p>
   </div>
 </template>
@@ -299,8 +215,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
 }
 
 .avatar {
@@ -314,54 +228,23 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
 
 .title-text {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
-  min-width: 0;
 }
 
 .chat-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .chat-subtitle {
   font-size: 11px;
   color: #909399;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.voice-pill {
-  font-size: 11px;
-  color: #3f9e4d;
-  background: #eaf6ef;
-  border-radius: 12px;
-  padding: 3px 8px;
-  white-space: nowrap;
-}
-
-.voice-pill.playing {
-  color: #fff;
-  background: #67c23a;
-}
-
-.voice-pill.paused {
-  color: #b88230;
-  background: #fdf3e0;
 }
 
 .new-btn {
@@ -377,63 +260,6 @@ onBeforeUnmount(() => {
 .new-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.voice-panel {
-  background: #fff;
-  border-bottom: 1px solid #eee;
-  padding: 8px 12px;
-}
-
-.voice-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.voice-label {
-  font-size: 12px;
-  color: #606266;
-  flex-shrink: 0;
-}
-
-.voice-chips {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.voice-chip {
-  flex-shrink: 0;
-  border: 1px solid #dcdfe6;
-  color: #606266;
-  background: #fff;
-  border-radius: 14px;
-  padding: 3px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.voice-chip.active {
-  border-color: #67c23a;
-  color: #3f9e4d;
-  background: #eaf6ef;
-  font-weight: 600;
-}
-
-.auto-read {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: #606266;
-  cursor: pointer;
-}
-
-.auto-read input {
-  accent-color: #67c23a;
 }
 
 .msg-list {
@@ -502,36 +328,10 @@ onBeforeUnmount(() => {
   border-top-right-radius: 4px;
 }
 
-.speaking {
-  display: inline-block;
-  color: #67c23a;
-  font-size: 12px;
-  margin-left: 6px;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
 .interrupted {
   color: #c0c4cc;
   font-size: 12px;
   margin-left: 6px;
-}
-
-.replay-btn {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 6px;
-  border: 1px solid #67c23a;
-  background: #fff;
-  color: #3f9e4d;
-  border-radius: 12px;
-  padding: 2px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.replay-btn.active {
-  background: #67c23a;
-  color: #fff;
 }
 
 .error {
@@ -594,16 +394,5 @@ onBeforeUnmount(() => {
   color: #b0b3b8;
   text-align: center;
   background: #fff;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
 }
 </style>

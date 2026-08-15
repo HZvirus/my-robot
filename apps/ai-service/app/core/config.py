@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # --- Companion (health companionship chat, streaming) ---
     COMPANION_MAX_HISTORY: int = 12
 
+    # --- Science (popular-science encyclopedia chat, streaming) ---
+    SCIENCE_MAX_HISTORY: int = 12
+
     # --- iFlytek TTS (voice read-aloud, v2 online TTS) ---
     IFLYTEK_APP_ID: str = ""
     IFLYTEK_API_KEY: str = ""

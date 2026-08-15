@@ -61,6 +61,18 @@ API docs available at http://localhost:8000/docs
 
 带上 `conversationId` 即可继续上一次对话（自动携带最近 `COMPANION_MAX_HISTORY` 条消息作为上下文）。
 
+## 科普百科（SSE 流式 + 上下文）
+
+以「小科」人设提供通俗易懂的科普讲解（天文、地理、生物、物理等，纯文本、无语音）。同样基于本地 Ollama（`qwen2.5:7b`），会话自动持久化于 SQLite。
+
+### 接口
+
+- `POST /api/science/chat`：SSE 流式对话。请求 `{message, conversationId?}`，事件依次为 `conversationId`、多个 `delta`、`done`，末尾 `data: [DONE]`。
+- `GET /api/science/history/{conversation_id}`：会话消息列表。
+- `GET /api/science/conversations`：会话列表（id + 首条消息 + 时间）。
+
+带上 `conversationId` 即可继续上一次对话（自动携带最近 `SCIENCE_MAX_HISTORY` 条消息作为上下文）。
+
 ## 智能导诊（RAG over Ollama）
 
 基于本地 Ollama（`qwen2.5:7b` 生成 + `bge-m3` 嵌入）与 ChromaDB 向量库的知识库问答接口，独立于现有 `/api/chat`。
@@ -115,7 +127,7 @@ ingest-kb
 > 切换嵌入模型（如本地 `bge-m3` → 通义 `text-embedding-v3`）后，须同步 `EMBEDDING_DIM` 并清空 `data/chroma` 重新执行 `ingest-kb`。
 ## 设备鉴权（会话归属）
 
-会话接口（/api/chat*、/api/companion/*、/api/triage/chat、/api/triage/history/*、/api/triage/conversations）与 /api/smart-tts/* 需要 Authorization: Bearer <device-token>。
+会话接口（/api/chat*、/api/companion/*、/api/science/*、/api/triage/chat、/api/triage/history/*、/api/triage/conversations）与 /api/smart-tts/* 需要 Authorization: Bearer <device-token>。
 
 - POST /api/auth/device：客户端首次生成 16-128 位设备令牌，换取稳定 user_id；服务端只存 SHA-256 哈希，数据库泄露不暴露原始凭据。
 - 会话按 owner_id 隔离：访问他人会话返回 404（不暴露存在性），会话列表仅返回本人会话。

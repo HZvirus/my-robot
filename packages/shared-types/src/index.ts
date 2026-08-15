@@ -118,6 +118,37 @@ export interface CompanionConversation {
   preview: string
 }
 
+export interface ScienceRequest {
+  message: string
+  conversationId?: string
+}
+
+export interface ScienceStreamEvent {
+  conversationId?: string
+  delta?: string
+  done?: boolean
+  error?: string
+}
+
+export interface ScienceMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  interrupted: boolean
+  createdAt: string
+}
+
+export interface ScienceHistoryResponse {
+  conversationId: string
+  messages: ScienceMessage[]
+}
+
+export interface ScienceConversation {
+  id: string
+  createdAt: string
+  preview: string
+}
+
 export interface TtsStreamRequest {
   text: string
   voice?: string

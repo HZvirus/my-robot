@@ -32,6 +32,11 @@ const router = createRouter({
       component: () => import('@/views/CompanionFastView.vue')
     },
     {
+      path: '/science',
+      name: 'science',
+      component: () => import('@/views/ScienceView.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue')

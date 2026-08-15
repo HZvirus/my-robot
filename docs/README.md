@@ -15,11 +15,11 @@
 ## 相关代码位置
 
 - 后端：`apps/ai-service/app/`
-  - 路由：`api/routes/{chat,companion,triage,tts,smart_tts}.py`
-  - 服务：`services/{chat_service,companion_service,triage_service,ollama_client,embedding,vector_store,kb_loader,text_splitter,departments,tts_service,smart_tts_service}.py`
-  - DTO：`models/{chat,companion,triage,tts,smart_tts}.py`，ORM：`db/models.py`
-- 前端：`apps/h5-app1/`（智能助手 / 智能导诊 / 挂号）、`apps/h5-app2/`（健康陪伴）
-  - SSE 工具：`src/utils/sse.ts`，会话状态：`src/stores/{chat,triage,companion}.ts`
+  - 路由：`api/routes/{chat,companion,science,triage,tts,smart_tts}.py`
+  - 服务：`services/{chat_service,companion_service,science_service,triage_service,ollama_client,embedding,vector_store,kb_loader,text_splitter,departments,tts_service,smart_tts_service}.py`
+  - DTO：`models/{chat,companion,science,triage,tts,smart_tts}.py`，ORM：`db/models.py`
+- 前端：`apps/h5-app1/`（智能助手 / 智能导诊 / 挂号）、`apps/h5-app2/`（健康陪伴 / 科普百科）
+  - SSE 工具：`src/utils/sse.ts`，会话状态：`src/stores/{chat,triage,companion,science}.ts`
   - 超拟人 TTS（小安快速版）：`src/views/CompanionFastView.vue`、`src/composables/useSmartTts*.ts`、`src/api/smartTts*.ts`
 - 共享：`packages/shared-types/`（TS 类型）、`packages/ui/`（`TypewriterText`、`SpeechButton`、`useSpeech`）
 - 知识库：`apps/ai-service/knowledge/*.md`，入库脚本：`apps/ai-service/scripts/ingest_kb.py`
@@ -31,6 +31,7 @@
 | 通用聊天（非流式，旧接口） | `POST /api/chat` | 云端 OpenAI 兼容 API（`AI_*`） | 否 |
 | 通用聊天（流式，带上下文） | `POST /api/chat/stream` | 本地 Ollama | 是 |
 | 健康陪伴聊天 | `POST /api/companion/chat` | 本地 Ollama | 是 |
+| 科普百科聊天 | `POST /api/science/chat` | 本地 Ollama | 是 |
 | 智能导诊（RAG） | `POST /api/triage/chat` | 本地 Ollama + ChromaDB | 是 |
 | 语音朗读（TTS） | `POST /api/tts/stream` | 讯飞 WebSocket | 是 |
 | 超拟人 TTS（小安快速版） | `POST /api/smart-tts/stream` / `stream-text` | 讯飞超拟人 WS（可浏览器直连） | 是 |
