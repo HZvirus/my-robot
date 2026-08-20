@@ -4,12 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify';
-import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 import { AppModule } from './app.module';
 import { APP_CONFIG } from './config/configuration';
-import { WsRegistrar } from './ws/ws.registrar';
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
@@ -33,14 +31,10 @@ async function bootstrap(): Promise<void> {
   fastify.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
     done(null, body);
   });
-  await fastify.register(websocket);
 
   app.enableShutdownHooks();
 
   await probeUpstream(config.AI_SERVICE_URL);
-
-  const wsRegistrar = app.get(WsRegistrar);
-  wsRegistrar.register(fastify);
 
   await app.listen({ port: config.BFF_PORT, host: config.BFF_HOST });
 

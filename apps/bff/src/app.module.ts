@@ -5,10 +5,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { HealthModule } from './health/health.module';
 import { ProxyModule } from './proxy/proxy.module';
-import { WsModule } from './ws/ws.module';
 
 @Module({
-  imports: [ConfigModule, HealthModule, ProxyModule, WsModule],
+  imports: [ConfigModule, HealthModule, ProxyModule],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

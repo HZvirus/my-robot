@@ -26,7 +26,6 @@ function textToBase64(text: string): string {
 /**
  * 通过 WebSocket 直连讯飞超拟人语音合成接口的流式客户端。
  *
- * 与 streamSmartTtsText（SSE 转发）的差异：
  * 1. 浏览器无法在 WebSocket 握手时附加 `x-api-key` 头，因此连接必须使用
  *    HMAC-SHA256 签名 URL。签名统一由后端完成：前端调用
  *    `GET /api/smart-tts/ws-url` 获取签名地址，不持有任何讯飞凭据。

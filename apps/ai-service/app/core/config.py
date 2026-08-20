@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,54 +16,16 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./app.db"
 
-    # --- General chat (streaming, context-aware) ---
-    CHAT_MAX_HISTORY: int = 10
-
     # --- Companion (health companionship chat, streaming) ---
     COMPANION_MAX_HISTORY: int = 12
 
-    # --- Science (popular-science encyclopedia chat, streaming) ---
-    SCIENCE_MAX_HISTORY: int = 12
-    # Topic-drift detection: cosine similarity below this value against the
-    # conversation topic vector starts a fresh conversation.
-    SCIENCE_TOPIC_SIM_THRESHOLD: float = 0.51
-    # Number of recent messages (user+assistant) forming the topic vector.
-    SCIENCE_TOPIC_WINDOW: int = 4
-    # Weight of user messages vs assistant replies in the topic vector.
-    SCIENCE_TOPIC_USER_WEIGHT: float = 0.6
-    # Exponential decay per position; the newest message keeps the most weight.
-    SCIENCE_TOPIC_DECAY: float = 0.9
-
-    # --- iFlytek TTS (voice read-aloud, v2 online TTS) ---
-    IFLYTEK_APP_ID: str = ""
-    IFLYTEK_API_KEY: str = ""
-    IFLYTEK_API_SECRET: str = ""
-    IFLYTEK_TTS_URL: str = "wss://tts-api.xfyun.cn/v2/tts"
-    IFLYTEK_TTS_VOICE: str = "xiaoyan"
-    IFLYTEK_TTS_SPEED: int = 50
-    IFLYTEK_TTS_VOLUME: int = 50
-    IFLYTEK_TTS_PITCH: int = 50
-    IFLYTEK_TTS_MAX_BYTES: int = 8000
-
-    # --- iFlytek Super Smart TTS (超拟人语音合成, independent of v2) ---
+    # --- iFlytek Super Smart TTS (超拟人语音合成) ---
+    # The frontend connects directly to iFlytek via an HMAC-SHA256 signed
+    # WebSocket URL; we only need app_id / api_key / api_secret to sign.
     IFLYTEK_SMART_TTS_URL: str = "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6"
-    IFLYTEK_SMART_TTS_AUTH_METHOD: int = 1
     IFLYTEK_SMART_TTS_APP_ID: str = ""
     IFLYTEK_SMART_TTS_API_KEY: str = ""
     IFLYTEK_SMART_TTS_API_SECRET: str = ""
-    IFLYTEK_SMART_TTS_API_PASSWORD: str = ""
-    IFLYTEK_SMART_TTS_VOICE: str = "x6_lingxiaoxuan_flow"
-    IFLYTEK_SMART_TTS_SPEED: int = 50
-    IFLYTEK_SMART_TTS_VOLUME: int = 50
-    IFLYTEK_SMART_TTS_PITCH: int = 50
-    IFLYTEK_SMART_TTS_SAMPLE_RATE: int = 24000
-    IFLYTEK_SMART_TTS_MAX_BYTES: int = 65536
-
-    # --- Triage / RAG (Ollama + ChromaDB) ---
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_LLM_MODEL: str = "qwen2.5:7b"
-    OLLAMA_EMBED_MODEL: str = "bge-m3"
-    OLLAMA_TIMEOUT: float = 120.0
 
     # --- LLM backend (OpenAI-compatible: Ollama / vLLM / Aliyun DashScope / ...) ---
     LLM_BASE_URL: str = ""
@@ -71,20 +33,9 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""
     LLM_TIMEOUT: float = 0.0
 
-    # --- Embedding backend (OpenAI-compatible) ---
-    EMBED_BASE_URL: str = ""
-    EMBED_API_KEY: str = ""
-    EMBED_MODEL: str = ""
-    EMBED_TIMEOUT: float = 0.0
-
-    EMBEDDING_DIM: int = 1024
-    CHROMA_PERSIST_DIR: str = "./data/chroma"
-    CHROMA_COLLECTION: str = "hospital_kb"
-    KB_DIR: str = "./knowledge"
-    TRIAGE_TOP_K: int = 4
-    TRIAGE_MAX_HISTORY: int = 6
-    TRIAGE_CHUNK_SIZE: int = 500
-    TRIAGE_CHUNK_OVERLAP: int = 80
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_LLM_MODEL: str = "qwen2.5:7b"
+    OLLAMA_TIMEOUT: float = 120.0
 
     # --- RBAC / knowledge-base scopes ---
     # HMAC secret used to sign elevated role tokens. When empty, elevated
