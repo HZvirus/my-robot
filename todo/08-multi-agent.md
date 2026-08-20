@@ -42,7 +42,7 @@
 
 ### 6. 流式输出
 - [ ] SSE 事件扩展：`route`(目标 Agent) / `agent_delta`(某 Agent 输出) / `handoff` / `final_delta` / `done`，沿用 `chat.py` SSE 与 `_parse_delta`
-- [ ] 前端展示多 Agent 推理链（参考 `apps/h5-app1` 逐字渲染 + Agent 标签）
+- [ ] 前端展示多 Agent 推理链（参考 `apps/h5-app2` 逐字渲染 + Agent 标签）
 
 ### 7. 路由接入
 - [ ] `app/api/routes/agent.py`：`POST /api/agent/stream` 统一入口，复用 `deps.py:22` `CurrentUser` 与 `rbac.py` 角色；在 `main.py:68` 注册路由

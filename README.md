@@ -7,7 +7,6 @@ Monorepo containing H5 Vue applications and a Python AI backend service.
 ```
 my-robot/
 ├── apps/
-│   ├── h5-app1/        # H5 page one (Vue 3 + Vite)
 │   ├── h5-app2/        # H5 page two (Vue 3 + Vite)
 │   └── ai-service/     # Python AI backend service (FastAPI)
 ├── packages/

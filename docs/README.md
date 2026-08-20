@@ -1,4 +1,4 @@
-﻿# 导诊与聊天技术文档
+# 导诊与聊天技术文档
 
 本目录整理 `my-robot` 项目中「智能导诊（Triage）」与「聊天（Chat）」相关的实现文档，覆盖后端处理、本地模型、讯飞 TTS、前端流式与语言处理。
 
@@ -20,7 +20,7 @@
   - 路由：`api/routes/{chat,companion,science,triage,tts,smart_tts}.py`
   - 服务：`services/{chat_service,companion_service,science_service,triage_service,ollama_client,embedding,vector_store,kb_loader,text_splitter,departments,tts_service,smart_tts_service}.py`
   - DTO：`models/{chat,companion,science,triage,tts,smart_tts}.py`，ORM：`db/models.py`
-- 前端：`apps/h5-app1/`（智能助手 / 智能导诊 / 挂号）、`apps/h5-app2/`（健康陪伴 / 科普百科）
+- 前端：`apps/h5-app2/`（智能助手 / 智能导诊 / 挂号 / 健康陪伴 / 科普百科）
   - SSE 工具：`src/utils/sse.ts`，会话状态：`src/stores/{chat,triage,companion,science}.ts`
   - 超拟人 TTS（小安快速版）：`src/views/CompanionFastView.vue`、`src/composables/useSmartTts*.ts`、`src/api/smartTts*.ts`
 - 共享：`packages/shared-types/`（TS 类型）、`packages/ui/`（`TypewriterText`、`SpeechButton`、`useSpeech`）

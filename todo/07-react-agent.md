@@ -39,7 +39,7 @@
 
 ### 6. 流式输出
 - [ ] 新增 SSE 事件类型：`thought` / `action` / `observation` / `delta` / `done`，沿用 `chat.py` SSE 模式与 `_parse_delta`
-- [ ] 前端可实时展示推理链（参考 `apps/h5-app1` 逐字渲染）
+- [ ] 前端可实时展示推理链（参考 `apps/h5-app2` 逐字渲染）
 
 ### 7. 路由接入
 - [ ] `app/api/routes/react.py`：`POST /api/react/stream`，复用 `CurrentUser` 鉴权（`deps.py`）与 RBAC（`rbac.py`），在 `main.py` 注册路由

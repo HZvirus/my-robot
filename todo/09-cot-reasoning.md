@@ -34,7 +34,7 @@
 
 ### 4. 流式输出
 - [ ] SSE 事件扩展：`thought`(推理链，可折叠) / `delta`(终答逐字) / `done`，沿用 `chat.py` SSE 与 `_parse_delta`（`llm_client.py:112`）
-- [ ] 前端可选择性展示推理链（参考 `apps/h5-app1` 逐字渲染 + 折叠面板）
+- [ ] 前端可选择性展示推理链（参考 `apps/h5-app2` 逐字渲染 + 折叠面板）
 
 ### 5. 推理链持久化与回放
 - [ ] 扩展 `Message`（`models.py:43`）增 `thought` 字段，或复用 `AgentStep.thought`（`docs/09-robot-dialog-flow.md:269`），区别于只存终答的 `_persist`（`chat_service.py:129`）

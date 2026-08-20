@@ -38,8 +38,7 @@ apps/ai-service/
 
 前端：
 
-- `apps/h5-app1`：智能助手（`/chat`）、智能导诊（`/triage`）、挂号（`/register`）。
-- `apps/h5-app2`：健康陪伴（`/`）。
+- `apps/h5-app2`：健康陪伴（`/`、`/companion`、`/companion/smart`、`/companion/fast`）、科普百科（`/science`）、设置（`/settings`）。
 - 共享 `packages/ui` 提供 `TypewriterText`（逐字渲染）、`SpeechButton`、`useSpeech`（语音朗读）。
 
 ## 3. 配置项（`app/core/config.py` 与 `.env`）

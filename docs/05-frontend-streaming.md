@@ -2,7 +2,7 @@
 
 ## 1. 为什么用 `fetch` + `ReadableStream`，而不是 `EventSource`
 
-`EventSource` 只能 GET，无法携带 POST body，因此所有流式接口都用 **POST + SSE**。前端统一封装 `readSse()`（`apps/h5-app1/src/utils/sse.ts`，h5-app2 同构），内部用 `fetch` + `response.body.getReader()` 按行解析：
+`EventSource` 只能 GET，无法携带 POST body，因此所有流式接口都用 **POST + SSE**。前端统一封装 `readSse()`（`apps/h5-app2/src/utils/sse.ts`），内部用 `fetch` + `response.body.getReader()` 按行解析：
 
 ```ts
 export async function readSse<T>(
@@ -51,27 +51,21 @@ export async function readSse<T>(
 ```
 用户输入
   → store.send(text) 压入 user 气泡 + 空 assistant 气泡
-  → streamChat()/streamTriage()/streamCompanion()
+  → streamCompanion() / streamScience()
   → onEvent:
       conversationId → 记录会话
       delta          → assistant.content += delta（TypewriterText 逐字渲染）
-      sources        → 导诊：显示引用来源（<details> 折叠）
-      department / matchedDepartments → 导诊：渲染「挂号」按钮
       error          → 展示错误
   → onClose: 若内容为空置 interrupted，结束朗读
 ```
 
 ### 会话状态（Pinia）
 
-- `apps/h5-app1/src/stores/chat.ts`：`messages / conversationId / streaming / error`，`send()` 负责组装 SSE 请求并驱动增量。
-- `apps/h5-app1/src/stores/triage.ts`：额外管理 `sources / departments / primaryDepartment / recommendedDepartments`；流结束后若后端未返回科室事件，用本地 `departmentsFor(text)` 从回答文本里匹配科室兜底。
-- `apps/h5-app2/src/stores/companion.ts`：同 chat，消息对象用 `reactive` 保持增量可响应。
-- `apps/h5-app2/src/stores/science.ts`：同 chat，纯文本科普助手（无 TTS/语音）。
+- `apps/h5-app2/src/stores/companion.ts`：管理陪伴聊天的消息流（`reactive` 保持增量可响应），`send()` 负责组装 SSE 请求并驱动增量。
+- `apps/h5-app2/src/stores/science.ts`：同 companion，纯文本科普助手（无 TTS/语音）。
 
 ### API 层
 
-- `src/api/chat.ts`：`streamChat`（`/api/chat/stream`）+ 旧的非流式 `chat`（axios）。
-- `src/api/triage.ts`：`streamTriage`（`/api/triage/chat`）+ `fetchDepartments`（`/api/triage/departments`）。
 - `src/api/companion.ts`：`streamCompanion`（`/api/companion/chat`）。
 - `src/api/science.ts`：`streamScience`（`/api/science/chat`）。
 
@@ -105,6 +99,6 @@ export async function readSse<T>(
 
 ## 5. 开发联调
 
-- `vite.config.ts` 已把 `/api` 代理到 `http://localhost:8000`（h5-app1:5173、h5-app2:5174），前端无需处理跨域。
-- 后端 CORS 白名单默认包含 5173/5174。
-- 手动验证流式：`curl -N -X POST http://localhost:8000/api/chat/stream -H "Content-Type: application/json" -d '{"message":"你好"}'`
+- `vite.config.ts` 已把 `/api` 代理到 `http://localhost:8000`（h5-app2:5174），前端无需处理跨域。
+- 后端 CORS 白名单默认包含 5174。
+- 手动验证流式：`curl -N -X POST http://localhost:8000/api/companion/chat -H "Content-Type: application/json" -d '{"message":"你好"}'`
