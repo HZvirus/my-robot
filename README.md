@@ -8,6 +8,7 @@ Monorepo containing H5 Vue applications and a Python AI backend service.
 my-robot/
 ├── apps/
 │   ├── h5-app2/        # H5 page two (Vue 3 + Vite)
+│   ├── bff/            # Node BFF (NestJS + Fastify, port 5175)
 │   └── ai-service/     # Python AI backend service (FastAPI)
 ├── packages/
 │   ├── shared-types/   # Shared TypeScript types

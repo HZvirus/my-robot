@@ -1,0 +1,33 @@
+{
+    "name": "@my-robot/bff",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Node BFF between H5 frontends and the Python AI service",
+    "scripts": {
+        "dev": "tsx watch src/main.ts",
+        "build": "tsc -p tsconfig.json",
+        "start": "tsx src/main.ts",
+        "lint": "eslint src --ext .ts",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@fastify/websocket": "^11.0.0",
+        "@nestjs/common": "^11.0.0",
+        "@nestjs/core": "^11.0.0",
+        "@nestjs/platform-fastify": "^11.0.0",
+        "dotenv": "^16.4.5",
+        "fastify": "^5.0.0",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.1",
+        "ws": "^8.18.0",
+        "zod": "^3.23.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "@types/ws": "^8.5.10",
+        "tsx": "^4.19.0",
+        "typescript": "^5.4.0"
+    }
+}
