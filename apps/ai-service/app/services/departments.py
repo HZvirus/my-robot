@@ -1,9 +1,9 @@
-"""Hospital department registry parsed from the knowledge base.
+﻿"""Hospital department registry parsed from the knowledge base.
 
-``knowledge/departments.md`` is the single source of truth for the
-departments this hospital actually offers. Triage recommendations are
-validated against this registry so the frontend can only offer a
-"register" action for departments that really exist.
+knowledge/public/departments.md (or knowledge/departments.md) is the single
+source of truth for the departments this hospital actually offers. Triage
+recommendations are validated against this registry so the frontend can only
+offer a "register" action for departments that really exist.
 """
 
 import hashlib
@@ -34,11 +34,19 @@ def _default_id(name: str) -> str:
     return hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
 
 
+def _departments_path(root: Path) -> Path | None:
+    """Find the departments registry, preferring the public scope directory."""
+    for candidate in (root / "public" / "departments.md", root / "departments.md"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def load_departments(kb_dir: str | None = None) -> list[Department]:
     """Parse the departments knowledge file into a structured registry."""
     root = Path(kb_dir or settings.KB_DIR)
-    path = root / "departments.md"
-    if not path.exists():
+    path = _departments_path(root)
+    if path is None:
         return []
 
     departments: list[Department] = []
@@ -80,7 +88,7 @@ def list_departments() -> list[dict[str, str]]:
 
 
 def match_departments(text: str) -> list[Department]:
-    """Return the departments whose name occurs in *text*, in order of first occurrence."""
+    """Return the departments whose name occurs in text, in order of first occurrence."""
     if not text:
         return []
     index = _department_index()
@@ -96,7 +104,7 @@ def match_departments(text: str) -> list[Department]:
 
 
 def resolve_primary(text: str) -> Department | None:
-    """Extract the recommended department from the ``推荐科室：X`` marker line.
+    """Extract the recommended department from the 推荐科室：X marker line.
 
     Falls back to the first department mentioned in the text when the marker
     is missing, is "无", or names a department the hospital does not offer.

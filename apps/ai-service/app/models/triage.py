@@ -1,4 +1,4 @@
-"""Pydantic DTOs for the triage endpoints (camelCase JSON via aliases)."""
+﻿"""Pydantic DTOs for the triage endpoints (camelCase JSON via aliases)."""
 
 from datetime import datetime
 
@@ -22,6 +22,7 @@ class DepartmentOut(BaseModel):
 class TriageSource(BaseModel):
     file: str
     text: str
+    scope: str = ""
 
 
 class TriageMessageOut(BaseModel):

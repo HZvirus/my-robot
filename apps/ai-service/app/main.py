@@ -1,4 +1,4 @@
-'''FastAPI application entry.'''
+﻿"""FastAPI application entry."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -15,21 +15,32 @@ from app.db.session import Base, engine
 
 
 def _run_lightweight_migrations() -> None:
-    '''Patch schema drift that create_all cannot handle (existing dev databases).
+    """Patch schema drift that create_all cannot handle (existing dev databases).
 
-    create_all only creates missing tables; for an existing conversations table
-    the owner_id column must be added manually (SQLite supports ADD COLUMN).
-    '''
+    create_all only creates missing tables; for existing tables new columns
+    must be added manually (SQLite supports ADD COLUMN).
+    """
     with engine.begin() as conn:
-        columns = {c['name'] for c in inspect(conn).get_columns('conversations')}
-        if 'owner_id' not in columns:
-            conn.execute(text('ALTER TABLE conversations ADD COLUMN owner_id VARCHAR(64)'))
-            conn.execute(
-                text(
-                    'CREATE INDEX IF NOT EXISTS ix_conversations_owner_id '
-                    'ON conversations (owner_id)'
+        inspector = inspect(conn)
+        tables = set(inspector.get_table_names())
+        if "users" in tables:
+            ucols = {c["name"] for c in inspector.get_columns("users")}
+            if "role" not in ucols:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT 'patient'")
                 )
-            )
+        if "conversations" in tables:
+            ccols = {c["name"] for c in inspector.get_columns("conversations")}
+            if "owner_id" not in ccols:
+                conn.execute(text("ALTER TABLE conversations ADD COLUMN owner_id VARCHAR(64)"))
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_conversations_owner_id "
+                        "ON conversations (owner_id)"
+                    )
+                )
+            if "role" not in ccols:
+                conn.execute(text("ALTER TABLE conversations ADD COLUMN role VARCHAR(32)"))
 
 
 @asynccontextmanager
@@ -50,20 +61,20 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix='/api', tags=['auth'])
-app.include_router(chat.router, prefix='/api', tags=['chat'])
-app.include_router(companion.router, prefix='/api', tags=['companion'])
-app.include_router(science.router, prefix='/api', tags=['science'])
-app.include_router(profile.router, prefix='/api', tags=['profile'])
-app.include_router(triage.router, prefix='/api', tags=['triage'])
-app.include_router(tts.router, prefix='/api', tags=['tts'])
-app.include_router(smart_tts.router, prefix='/api', tags=['smart-tts'])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(chat.router, prefix="/api", tags=["chat"])
+app.include_router(companion.router, prefix="/api", tags=["companion"])
+app.include_router(science.router, prefix="/api", tags=["science"])
+app.include_router(profile.router, prefix="/api", tags=["profile"])
+app.include_router(triage.router, prefix="/api", tags=["triage"])
+app.include_router(tts.router, prefix="/api", tags=["tts"])
+app.include_router(smart_tts.router, prefix="/api", tags=["smart-tts"])
 
 
-@app.get('/health')
+@app.get("/health")
 async def health() -> dict[str, str]:
-    return {'status': 'ok'}
+    return {"status": "ok"}

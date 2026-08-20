@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Iterator
+﻿from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,6 +6,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.api.deps import get_current_user
 from app.api.routes import smart_tts as smart_tts_route
+from app.core.rbac import Principal
 from app.main import app
 from app.services.smart_tts_service import (
     SuperSmartTTSService,
@@ -17,7 +18,9 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def auth_user() -> Iterator[None]:
-    app.dependency_overrides[get_current_user] = lambda: 'tester'
+    app.dependency_overrides[get_current_user] = lambda: Principal(
+        user_id="tester", role="patient"
+    )
     yield
     app.dependency_overrides.pop(get_current_user, None)
 
@@ -26,7 +29,7 @@ class FakeSmartTTSService:
     def __init__(
         self, chunks: list[bytes] | None = None, error: str | None = None
     ) -> None:
-        self.chunks = chunks or [b'\xff\xfb\x01\x02\x03']
+        self.chunks = chunks or [b"\xff\xfb\x01\x02\x03"]
         self.error = error
 
     async def synthesize(
@@ -50,107 +53,106 @@ class FakeSmartTTSService:
             yield chunk
 
 
-
 def _patch_service(monkeypatch, fake: FakeSmartTTSService) -> None:
-    monkeypatch.setattr(smart_tts_route, 'smart_tts_service', fake)
+    monkeypatch.setattr(smart_tts_route, "smart_tts_service", fake)
 
 
 def _service(auth_method: int = 1) -> SuperSmartTTSService:
     return SuperSmartTTSService(
-        app_id='a',
-        api_key='b',
-        api_secret='c',
-        api_password='pw',
-        base_url='wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6',
+        app_id="a",
+        api_key="b",
+        api_secret="c",
+        api_password="pw",
+        base_url="wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6",
         auth_method=auth_method,
     )
 
 
 def test_truncate_to_bytes_respects_limit() -> None:
-    text = '汉字汉字汉字'
-    assert _truncate_to_bytes(text, 7) == '汉字'
+    text = "汉字汉字汉字"
+    assert _truncate_to_bytes(text, 7) == "汉字"
 
 
 def test_auth_method1_uses_raw_url_and_api_key_header() -> None:
     svc = _service(auth_method=1)
-    assert svc.build_url() == 'wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6'
-    assert svc.build_headers() == {'x-api-key': 'pw'}
+    assert svc.build_url() == "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6"
+    assert svc.build_headers() == {"x-api-key": "pw"}
 
 
 def test_auth_method2_signs_url_without_header() -> None:
     svc = _service(auth_method=2)
     url = svc.build_url()
-    assert url.startswith('wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6?')
-    assert 'authorization=' in url
-    assert '&date=' in url
-    assert '&host=cbm01.cn-huabei-1.xf-yun.com' in url
+    assert url.startswith("wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6?")
+    assert "authorization=" in url
+    assert "&date=" in url
+    assert "&host=cbm01.cn-huabei-1.xf-yun.com" in url
     assert svc.build_headers() is None
 
 
 def test_smart_tts_ws_url_returns_signed_url(monkeypatch) -> None:
-    monkeypatch.setattr(smart_tts_route, 'smart_tts_service', _service(auth_method=2))
-    resp = client.get('/api/smart-tts/ws-url')
+    monkeypatch.setattr(smart_tts_route, "smart_tts_service", _service(auth_method=2))
+    resp = client.get("/api/smart-tts/ws-url")
     assert resp.status_code == 200
     data = resp.json()
-    assert data['url'].startswith(
-        'wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6?'
+    assert data["url"].startswith(
+        "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6?"
     )
-    assert 'authorization=' in data['url']
-    assert data['app_id'] == 'a'
+    assert "authorization=" in data["url"]
+    assert data["app_id"] == "a"
 
 
 def test_smart_tts_ws_url_rejects_auth_method1(monkeypatch) -> None:
-    monkeypatch.setattr(smart_tts_route, 'smart_tts_service', _service(auth_method=1))
-    resp = client.get('/api/smart-tts/ws-url')
+    monkeypatch.setattr(smart_tts_route, "smart_tts_service", _service(auth_method=1))
+    resp = client.get("/api/smart-tts/ws-url")
     assert resp.status_code == 400
 
 
 def test_smart_tts_stream_yields_audio(monkeypatch) -> None:
     _patch_service(
-        monkeypatch, FakeSmartTTSService(chunks=[b'\xff\xfb\x01', b'\x02\x03'])
+        monkeypatch, FakeSmartTTSService(chunks=[b"\xff\xfb\x01", b"\x02\x03"])
     )
     response = client.post(
-        '/api/smart-tts/stream',
-        json={'text': '你好', 'voice': 'x6_lingxiaoxuan_flow'},
+        "/api/smart-tts/stream",
+        json={"text": "你好", "voice": "x6_lingxiaoxuan_flow"},
     )
     assert response.status_code == 200
-    assert response.headers['content-type'].startswith('text/event-stream')
+    assert response.headers["content-type"].startswith("text/event-stream")
     body = response.text
-    assert 'data: ' in body
-    assert 'data: [DONE]' in body
+    assert "data: " in body
+    assert "data: [DONE]" in body
 
 
 def test_smart_tts_stream_error_yields_error_event(monkeypatch) -> None:
-    _patch_service(monkeypatch, FakeSmartTTSService(error='boom'))
-    response = client.post('/api/smart-tts/stream', json={'text': '你好'})
+    _patch_service(monkeypatch, FakeSmartTTSService(error="boom"))
+    response = client.post("/api/smart-tts/stream", json={"text": "你好"})
     assert response.status_code == 200
     assert '"error": "boom"' in response.text
 
 
 def test_smart_tts_stream_rejects_empty_text() -> None:
-    response = client.post('/api/smart-tts/stream', json={'text': ''})
+    response = client.post("/api/smart-tts/stream", json={"text": ""})
     assert response.status_code == 422
 
 
 def test_smart_tts_ws_bridge_streams_audio(monkeypatch) -> None:
-    _patch_service(monkeypatch, FakeSmartTTSService(chunks=[b'\xff\xfb\x01']))
-    monkeypatch.setattr(smart_tts_route, '_verify_ws_token', lambda token: 'tester')
-    with client.websocket_connect('/api/smart-tts/ws?token=t') as ws:
-        ws.send_text('{}')
+    _patch_service(monkeypatch, FakeSmartTTSService(chunks=[b"\xff\xfb\x01"]))
+    monkeypatch.setattr(smart_tts_route, "_verify_ws_token", lambda token: "tester")
+    with client.websocket_connect("/api/smart-tts/ws?token=t") as ws:
+        ws.send_text("{}")
         ws.send_text('{"text": "你好"}')
         ws.send_text('{"end": true}')
         messages = []
         while True:
             msg = ws.receive_json()
             messages.append(msg)
-            if msg.get('done') or msg.get('error'):
+            if msg.get("done") or msg.get("error"):
                 break
-    assert any('audio' in m for m in messages)
-    assert messages[-1].get('done') is True
+    assert any("audio" in m for m in messages)
+    assert messages[-1].get("done") is True
 
 
 def test_smart_tts_ws_bridge_rejects_bad_token(monkeypatch) -> None:
-    monkeypatch.setattr(smart_tts_route, '_verify_ws_token', lambda token: None)
+    monkeypatch.setattr(smart_tts_route, "_verify_ws_token", lambda token: None)
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect('/api/smart-tts/ws?token=bad') as ws:
+        with client.websocket_connect("/api/smart-tts/ws?token=bad") as ws:
             ws.receive_json()

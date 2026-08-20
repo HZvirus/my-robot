@@ -1,4 +1,11 @@
-"""ChromaDB-backed vector store with a stable interface (swappable for FAISS)."""
+﻿"""ChromaDB-backed vector store with per-scope physical isolation.
+
+Each knowledge-base scope lives in its own ChromaDB collection
+(hospital_kb__<scope>). ScopedVectorStore fans queries out only across the
+collections the caller is permitted to read, so documents from other scopes
+are never retrieved -- isolation is enforced at retrieval time, not in the
+prompt.
+"""
 
 from pathlib import Path
 from typing import Any, Protocol
@@ -6,11 +13,16 @@ from typing import Any, Protocol
 import chromadb
 
 from app.core.config import settings
+from app.core.logger import get_logger
+from app.core.rbac import KB_SCOPES
+
+logger = get_logger(__name__)
 
 
 class VectorStoreProtocol(Protocol):
     def upsert(
         self,
+        scope: str,
         ids: list[str],
         documents: list[str],
         metadatas: list[dict[str, str | int]],
@@ -20,23 +32,26 @@ class VectorStoreProtocol(Protocol):
     def query(
         self,
         embedding: list[float],
+        *,
+        scopes: list[str],
         n_results: int | None = None,
         where: dict[str, str | int] | None = None,
     ) -> list[dict[str, Any]]: ...
 
-    def count(self) -> int: ...
+    def count(self, scope: str | None = None) -> int: ...
+
+
+def _distance(r: dict[str, Any]) -> float:
+    d = r.get("distance")
+    return float(d) if d is not None else float("inf")
 
 
 class ChromaVectorStore:
-    """Persistent ChromaDB collection storing hospital knowledge-base chunks."""
+    """Single-collection ChromaDB store bound to one scope."""
 
-    def __init__(
-        self,
-        persist_dir: str | None = None,
-        collection_name: str | None = None,
-    ) -> None:
-        self._persist_dir = persist_dir or settings.CHROMA_PERSIST_DIR
-        self._collection_name = collection_name or settings.CHROMA_COLLECTION
+    def __init__(self, persist_dir: str, collection_name: str) -> None:
+        self._persist_dir = persist_dir
+        self._collection_name = collection_name
         self._client: Any = None
         self._collection: Any = None
 
@@ -44,7 +59,7 @@ class ChromaVectorStore:
         if self._collection is not None:
             return
         Path(self._persist_dir).mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(path=str(self._persist_dir))
+        self._client = chromadb.PersistentClient(path=self._persist_dir)
         self._collection = self._client.get_or_create_collection(
             name=self._collection_name,
             metadata={"hnsw:space": "cosine"},
@@ -114,11 +129,83 @@ class ChromaVectorStore:
         return int(self._collection.count())
 
 
-_store: ChromaVectorStore | None = None
+class ScopedVectorStore:
+    """Routes upsert/query by knowledge-base scope.
+
+    query() only touches the collections listed in scopes; collections for
+    other scopes are never opened, so their content cannot leak into results.
+    """
+
+    def __init__(
+        self,
+        persist_dir: str | None = None,
+        collection_prefix: str | None = None,
+    ) -> None:
+        self._persist_dir = persist_dir or settings.CHROMA_PERSIST_DIR
+        self._prefix = collection_prefix or settings.CHROMA_COLLECTION
+        self._stores: dict[str, ChromaVectorStore] = {}
+
+    def _store_for(self, scope: str) -> ChromaVectorStore:
+        store = self._stores.get(scope)
+        if store is None:
+            store = ChromaVectorStore(self._persist_dir, f"{self._prefix}__{scope}")
+            self._stores[scope] = store
+        return store
+
+    def upsert(
+        self,
+        scope: str,
+        ids: list[str],
+        documents: list[str],
+        metadatas: list[dict[str, str | int]],
+        embeddings: list[list[float]],
+    ) -> None:
+        self._store_for(scope).upsert(ids, documents, metadatas, embeddings)
+
+    def query(
+        self,
+        embedding: list[float],
+        *,
+        scopes: list[str],
+        n_results: int | None = None,
+        where: dict[str, str | int] | None = None,
+    ) -> list[dict[str, Any]]:
+        per_scope = n_results if n_results is not None else settings.TRIAGE_TOP_K
+        merged: list[dict[str, Any]] = []
+        for scope in scopes:
+            try:
+                merged.extend(
+                    self._store_for(scope).query(
+                        embedding, n_results=per_scope, where=where
+                    )
+                )
+            except Exception:
+                logger.warning("scope query failed scope=%s", scope, exc_info=True)
+        # Cosine distance: lower is more similar; keep the closest chunks.
+        merged.sort(key=_distance)
+        top_n = n_results if n_results is not None else settings.TRIAGE_TOP_K
+        return merged[:top_n]
+
+    def count(self, scope: str | None = None) -> int:
+        if scope is not None:
+            try:
+                return self._store_for(scope).count()
+            except Exception:
+                return 0
+        total = 0
+        for name in KB_SCOPES:
+            try:
+                total += self._store_for(name).count()
+            except Exception:
+                continue
+        return total
 
 
-def get_vector_store() -> ChromaVectorStore:
+_store: ScopedVectorStore | None = None
+
+
+def get_vector_store() -> ScopedVectorStore:
     global _store
     if _store is None:
-        _store = ChromaVectorStore()
+        _store = ScopedVectorStore()
     return _store

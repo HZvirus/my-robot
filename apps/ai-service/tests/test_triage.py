@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.rbac import Principal
 from app.db import models as db_models  # noqa: F401 - register ORM models
 from app.db.session import Base
 from app.services.departments import (
@@ -30,6 +31,10 @@ def session_factory() -> Iterator[sessionmaker[Session]]:
         yield factory
     finally:
         engine.dispose()
+
+
+PATIENT = Principal(user_id="user-1", role="patient")
+DOCTOR = Principal(user_id="user-1", role="doctor")
 
 
 class FakeOllamaClient:
@@ -64,37 +69,85 @@ class CancellingClient(FakeOllamaClient):
 
 
 class FakeVectorStore:
-    def upsert(
-        self,
-        ids: list[str],
-        documents: list[str],
-        metadatas: list[dict[str, str | int]],
-        embeddings: list[list[float]],
-    ) -> None:
+    """Single public doc; honors scopes for isolation tests."""
+
+    def __init__(self, doc: str = "肚子疼建议挂消化内科", scope: str = "public") -> None:
+        self.doc = doc
+        self.scope = scope
+        self.last_scopes: list[str] | None = None
+
+    def upsert(self, scope, ids, documents, metadatas, embeddings) -> None:
         return None
 
-    def query(
-        self,
-        embedding: list[float],
-        n_results: int | None = None,
-        where: dict[str, str | int] | None = None,
-    ) -> list[dict[str, object]]:
+    def query(self, embedding, *, scopes, n_results=None, where=None):
+        self.last_scopes = list(scopes)
+        if self.scope not in scopes:
+            return []
         return [
             {
-                "document": "肚子疼建议挂消化内科",
-                "metadata": {"file": "symptoms.md", "index": 1},
+                "document": self.doc,
+                "metadata": {"file": "symptoms.md", "index": 1, "scope": self.scope},
                 "distance": 0.1,
             }
         ]
 
-    def count(self) -> int:
+    def count(self, scope=None) -> int:
+        return 1
+
+
+class ScopeAwareStore:
+    """Returns only chunks whose scope is in the queried scopes."""
+
+    def __init__(self, docs: list[tuple[str, str, float]]) -> None:
+        self.docs = docs
+        self.last_scopes: list[str] | None = None
+
+    def upsert(self, scope, ids, documents, metadatas, embeddings) -> None:
+        return None
+
+    def query(self, embedding, *, scopes, n_results=None, where=None):
+        self.last_scopes = list(scopes)
+        return [
+            {
+                "document": doc,
+                "metadata": {"file": f"f{i}.md", "index": 0, "scope": scope},
+                "distance": dist,
+            }
+            for i, (doc, scope, dist) in enumerate(self.docs)
+            if scope in scopes
+        ]
+
+    def count(self, scope=None) -> int:
+        return len(self.docs)
+
+
+class LeakingStore:
+    """Simulates a router bug: returns a clinical chunk for any scopes."""
+
+    def upsert(self, scope, ids, documents, metadatas, embeddings) -> None:
+        return None
+
+    def query(self, embedding, *, scopes, n_results=None, where=None):
+        return [
+            {
+                "document": "临床限制内容SECRET",
+                "metadata": {"file": "clin.md", "index": 0, "scope": "clinical"},
+                "distance": 0.01,
+            }
+        ]
+
+    def count(self, scope=None) -> int:
         return 1
 
 
 def _make_service(
-    client: FakeOllamaClient, session_factory: sessionmaker[Session]
+    client: FakeOllamaClient,
+    session_factory: sessionmaker[Session],
+    store: object | None = None,
 ) -> TriageService:
-    return TriageService(client, FakeVectorStore(), EmbeddingService(client), session_factory)
+    if store is None:
+        store = FakeVectorStore()
+    return TriageService(client, store, EmbeddingService(client), session_factory)
 
 
 def test_split_short_text() -> None:
@@ -130,16 +183,19 @@ def test_split_invalid_args() -> None:
 
 async def test_stream_answer_event_sequence_and_persist(session_factory) -> None:
     service = _make_service(FakeOllamaClient(deltas=["消化", "内科"]), session_factory)
-    events = [event async for event in service.stream_answer("肚子疼挂什么科", None, "user-1")]
+    events = [
+        event
+        async for event in service.stream_answer("肚子疼挂什么科", None, PATIENT)
+    ]
 
     assert "conversationId" in events[0]
     assert events[1]["sources"] == [
-        {"file": "symptoms.md", "text": "肚子疼建议挂消化内科"}
+        {"file": "symptoms.md", "text": "肚子疼建议挂消化内科", "scope": "public"}
     ]
     assert [e for e in events if "delta" in e] == [{"delta": "消化"}, {"delta": "内科"}]
     assert events[-1] == {"done": True}
 
-    history = service.get_history(events[0]["conversationId"], "user-1")
+    history = service.get_history(events[0]["conversationId"], PATIENT)
     assert [m.role for m in history.messages] == ["user", "assistant"]
     assert history.messages[0].content == "肚子疼挂什么科"
     assert history.messages[1].content == "消化内科"
@@ -150,9 +206,9 @@ async def test_stream_answer_includes_history(session_factory) -> None:
     client = FakeOllamaClient(deltas=["好"])
     service = _make_service(client, session_factory)
     conv_id = "conv-1"
-    async for _ in service.stream_answer("第一次", conv_id, "user-1"):
+    async for _ in service.stream_answer("第一次", conv_id, PATIENT):
         pass
-    async for _ in service.stream_answer("第二次", conv_id, "user-1"):
+    async for _ in service.stream_answer("第二次", conv_id, PATIENT):
         pass
 
     assert len(client.chat_calls) == 2
@@ -168,11 +224,11 @@ async def test_stream_answer_cancel_persists_partial(session_factory) -> None:
     service = _make_service(CancellingClient(deltas=[]), session_factory)
     events: list[dict[str, object]] = []
     with pytest.raises(asyncio.CancelledError):
-        async for event in service.stream_answer("问一个问题", None, "user-1"):
+        async for event in service.stream_answer("问一个问题", None, PATIENT):
             events.append(event)
 
     conv_id = events[0]["conversationId"]
-    history = service.get_history(conv_id, "user-1")
+    history = service.get_history(conv_id, PATIENT)
     assert len(history.messages) == 2
     assert history.messages[1].content == "部分"
     assert history.messages[1].interrupted is True
@@ -181,10 +237,10 @@ async def test_stream_answer_cancel_persists_partial(session_factory) -> None:
 async def test_list_conversations_returns_preview(session_factory) -> None:
     client = FakeOllamaClient(deltas=["回复"])
     service = _make_service(client, session_factory)
-    async for _ in service.stream_answer("我肚子疼", None, "user-1"):
+    async for _ in service.stream_answer("我肚子疼", None, PATIENT):
         pass
 
-    convs = service.list_conversations("user-1")
+    convs = service.list_conversations(PATIENT)
     assert len(convs) == 1
     assert convs[0].preview == "我肚子疼"
 
@@ -221,7 +277,10 @@ def test_resolve_primary_none_when_no_department() -> None:
 async def test_stream_answer_emits_department_events(session_factory) -> None:
     deltas = ["反复腹泻建议挂消化内科。", " 若腹痛剧烈请到急诊科。"]
     service = _make_service(FakeOllamaClient(deltas=deltas), session_factory)
-    events = [event async for event in service.stream_answer("反复腹泻挂什么科", None, "user-1")]
+    events = [
+        event
+        async for event in service.stream_answer("反复腹泻挂什么科", None, PATIENT)
+    ]
 
     department_event = next(e for e in events if "department" in e)
     assert department_event["department"]["name"] == "消化内科"
@@ -231,5 +290,72 @@ async def test_stream_answer_emits_department_events(session_factory) -> None:
     ]
     assert events[-1] == {"done": True}
 
-    history = service.get_history(events[0]["conversationId"], "user-1")
-    assert history.messages[1].content == "反复腹泻建议挂消化内科。 若腹痛剧烈请到急诊科。"
+    history = service.get_history(events[0]["conversationId"], PATIENT)
+    assert (
+        history.messages[1].content
+        == "反复腹泻建议挂消化内科。 若腹痛剧烈请到急诊科。"
+    )
+
+
+async def test_patient_cannot_retrieve_clinical_knowledge(session_factory) -> None:
+    store = ScopeAwareStore([
+        ("公开导诊信息PUBLIC", "public", 0.10),
+        ("临床限制内容SECRET", "clinical", 0.05),
+    ])
+    client = FakeOllamaClient(deltas=["回复"])
+    service = _make_service(client, session_factory, store=store)
+    events = [
+        event
+        async for event in service.stream_answer("问诊", None, PATIENT)
+    ]
+
+    sources_event = next(e for e in events if "sources" in e)
+    assert [s["scope"] for s in sources_event["sources"]] == ["public"]
+    assert "SECRET" not in client.chat_calls[0][0]["content"]
+    assert "PUBLIC" in client.chat_calls[0][0]["content"]
+    assert set(store.last_scopes) == {"public"}
+
+
+async def test_doctor_retrieves_clinical_scope(session_factory) -> None:
+    store = ScopeAwareStore([
+        ("公开导诊信息PUBLIC", "public", 0.10),
+        ("临床限制内容SECRET", "clinical", 0.05),
+    ])
+    client = FakeOllamaClient(deltas=["回复"])
+    service = _make_service(client, session_factory, store=store)
+    events = [
+        event
+        async for event in service.stream_answer("问诊", None, DOCTOR)
+    ]
+
+    sources_event = next(e for e in events if "sources" in e)
+    assert set(s["scope"] for s in sources_event["sources"]) == {"public", "clinical"}
+    assert "SECRET" in client.chat_calls[0][0]["content"]
+    assert set(store.last_scopes) == {"public", "clinical"}
+
+
+async def test_service_filters_leaked_scope_before_llm(session_factory) -> None:
+    """Even with a broken router returning a clinical chunk, the patient's
+    context fed to the LLM must not contain it: isolation does not rely on
+    the prompt."""
+    store = LeakingStore()
+    client = FakeOllamaClient(deltas=["回复"])
+    service = _make_service(client, session_factory, store=store)
+    events = [
+        event
+        async for event in service.stream_answer("问诊", None, PATIENT)
+    ]
+
+    sources_event = next(e for e in events if "sources" in e)
+    assert sources_event["sources"] == []
+    assert "SECRET" not in client.chat_calls[0][0]["content"]
+
+
+async def test_role_change_forces_new_conversation(session_factory) -> None:
+    client = FakeOllamaClient(deltas=["好"])
+    service = _make_service(client, session_factory)
+    events = [e async for e in service.stream_answer("第一次", None, DOCTOR)]
+    conv_id = events[0]["conversationId"]
+
+    events = [e async for e in service.stream_answer("继续", conv_id, PATIENT)]
+    assert events == [{"error": "无权访问该会话"}]

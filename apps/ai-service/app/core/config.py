@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -46,7 +46,6 @@ class Settings(BaseSettings):
     IFLYTEK_TTS_MAX_BYTES: int = 8000
 
     # --- iFlytek Super Smart TTS (超拟人语音合成, independent of v2) ---
-    # AUTH_METHOD: 1 = x-api-key header with APIPassword, 2 = HMAC-SHA256 signed URL
     IFLYTEK_SMART_TTS_URL: str = "wss://cbm01.cn-huabei-1.xf-yun.com/v1/private/mcd9m97e6"
     IFLYTEK_SMART_TTS_AUTH_METHOD: int = 1
     IFLYTEK_SMART_TTS_APP_ID: str = ""
@@ -67,14 +66,12 @@ class Settings(BaseSettings):
     OLLAMA_TIMEOUT: float = 120.0
 
     # --- LLM backend (OpenAI-compatible: Ollama / vLLM / Aliyun DashScope / ...) ---
-    # Leave LLM_* empty to fall back to OLLAMA_* (local dev on Ollama).
     LLM_BASE_URL: str = ""
     LLM_API_KEY: str = ""
     LLM_MODEL: str = ""
-    LLM_TIMEOUT: float = 0.0  # 0 -> fall back to OLLAMA_TIMEOUT
+    LLM_TIMEOUT: float = 0.0
 
     # --- Embedding backend (OpenAI-compatible) ---
-    # Leave EMBED_* empty to fall back to OLLAMA_*.
     EMBED_BASE_URL: str = ""
     EMBED_API_KEY: str = ""
     EMBED_MODEL: str = ""
@@ -88,6 +85,12 @@ class Settings(BaseSettings):
     TRIAGE_MAX_HISTORY: int = 6
     TRIAGE_CHUNK_SIZE: int = 500
     TRIAGE_CHUNK_OVERLAP: int = 80
+
+    # --- RBAC / knowledge-base scopes ---
+    # HMAC secret used to sign elevated role tokens. When empty, elevated
+    # roles (nurse/doctor/admin) cannot be registered; only the default
+    # patient role is accepted. Set it to allow issuing doctor/admin tokens.
+    RBAC_SIGNING_SECRET: str = ""
 
 
 @lru_cache

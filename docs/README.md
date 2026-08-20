@@ -1,4 +1,4 @@
-# 导诊与聊天技术文档
+﻿# 导诊与聊天技术文档
 
 本目录整理 `my-robot` 项目中「智能导诊（Triage）」与「聊天（Chat）」相关的实现文档，覆盖后端处理、本地模型、讯飞 TTS、前端流式与语言处理。
 
@@ -11,6 +11,8 @@
 | [05-frontend-streaming.md](./05-frontend-streaming.md) | 前端流式处理：fetch + ReadableStream 的 SSE 解析、逐字渲染、语音朗读 |
 | [06-language-processing.md](./06-language-processing.md) | 语言处理：文本分块、向量化、检索、上下文拼接、科室匹配、提示词设计 |
 | [07-smart-tts-streaming.md](./07-smart-tts-streaming.md) | 超拟人 TTS：讯飞双向流式合成、WS 直连、MSE 连续播放与关键修复 |
+| [08-science-topic-drift.md](./08-science-topic-drift.md) | 科普话题漂移检测：embedding 余弦相似度判定、自动换会话、阈值标定与调参 |
+| [09-robot-dialog-flow.md](./09-robot-dialog-flow.md) | 导诊机器人对话全流程：对话状态机 + Agent 循环 + 工具调用，判断科室 -> 挂号 -> 引导 -> 返航（仅 AI 部分） |
 
 ## 相关代码位置
 
