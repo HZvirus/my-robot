@@ -4,9 +4,9 @@
 
 ## 现状对齐（基于现有代码）
 
-- **无工具/技能抽象**。`llm_client` 未使用 tools 参数（`llm_client.py:80`）。各 service 是硬编码能力，非「可调用工具」。
-- 可沉淀为工具的现有能力：text-to-sql（见 `todo/text-to-sql.md`）、科室匹配（`departments.py` `match_departments`）、知识检索（`vector_store`）、挂号/医院信息（前端已有挂号入口）。
-- 已有可复用的模式：懒加载单例（`vector_store.py:207` `get_vector_store`）、RBAC 权限映射（`rbac.py` ROLE_SCOPES）。
+- **无工具/技能抽象**。`llm_client` 未使用 tools 参数（`llm_client.py:54`，`extra` 透传位 `:60`）。各 service 是硬编码能力，非「可调用工具」。
+- 可沉淀为工具的现有能力：text-to-sql（见 `todo/text-to-sql.md`）；科室匹配（原 `departments.py` `match_departments`）与知识检索（原 `vector_store`）已随重构移除，需重建；挂号/医院信息（前端已有挂号入口）。
+- 已有可复用的模式：懒加载单例（`auth_service.py:109` `auth_service`、`companion_service.py:228` `companion_service`）、RBAC 权限映射（`rbac.py` `ROLE_SCOPES`）。
 
 ## 目标
 
@@ -21,8 +21,8 @@
 
 ### 2. 内置工具实现
 - [ ] `tools/text_to_sql.py`（对应 `todo/text-to-sql.md`）
-- [ ] `tools/kb_search.py`（封装 `vector_store` 检索）
-- [ ] `tools/departments.py`（封装 `departments.match_departments`）
+- [ ] `tools/kb_search.py`（封装重建后的向量检索，见 03）
+- [ ] `tools/departments.py`（重建原 `departments.match_departments` 科室匹配）
 - [ ] `tools/hospital_info.py`（挂号/科室查询）
 
 ### 3. 三方 / 脚本工具
@@ -30,7 +30,7 @@
 
 ### 4. Skill 沉淀与按需加载
 - [ ] `Skill` = 相关工具 + 提示词 + 权限的打包单元
-- [ ] `skill_registry.py`：按需加载，懒初始化（参考 `get_vector_store` 模式）
+- [ ] `skill_registry.py`：按需加载，懒初始化（参考 `companion_service.py:228` 单例模式）
 - [ ] 权限：Skill 绑定 RBAC role（对齐 `rbac.py` ROLE_SCOPES），实现跨业务复用
 
 ### 5. 错误语义与降级

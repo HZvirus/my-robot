@@ -5,9 +5,9 @@
 ## 现状对齐（基于现有代码）
 
 - **日志**：`app/core/logger.py`，结构化有限。
-- **Prompt 硬编码**：常量散落各服务（`chat_service.py:23` `SYSTEM_PROMPT`、`triage_service.py:38`、`science_service.py:28`），无版本管理。
+- **Prompt 硬编码**：常量散落（现仅 `companion_service.py:27` `SYSTEM_PROMPT`；chat/triage/science 已移除），无版本管理。
 - **无** trace、无 token 计数、无指标、无 badcase 分析、无离线回放、无评测集。
-- 已有的可复用锚点：会话/消息可定位执行流（`Conversation`/`Message`）、science 已有相似度日志（`science_service.py:145`），可扩展为指标。
+- 已有的可复用锚点：会话/消息可定位执行流（`Conversation`/`Message`）、companion 流式事件序列（`companion.py:54`）、RBAC 角色（`rbac.py`），可扩展为指标。
 
 ## 目标
 

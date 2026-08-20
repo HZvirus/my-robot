@@ -4,11 +4,11 @@
 
 ## 现状对齐（基于现有代码）
 
-- LLM 调用为纯文本流式：`llm_client.chat_stream`（`app/services/llm_client.py:80`），`extra` 已预留透传位（`:99`）但未发 `tools`。
-- SSE 流式路由模式已有：`chat.py:51` + `_SSE_HEADERS`（`:24`），SSE 行解析 `_parse_delta`（`llm_client.py:112`）。
-- 单轮服务参考实现：`chat_service.stream_answer` retrieve -> prompt -> stream -> persist（`app/services/chat_service.py:38`），含 `CancelledError` 中断持久化（`:60`）。
-- 持久化基座：`Conversation`/`Message`（`app/db/models.py`），`_persist` 写双消息模式（`chat_service.py:129`）。
-- 可作为 Action 的能力：知识检索（`vector_store`）、科室匹配（`departments.match_departments`）、text-to-sql（`todo/text-to-sql.md`）。
+- LLM 调用为纯文本流式：`llm_client.chat_stream`（`app/services/llm_client.py:54`），`extra` 已预留透传位（`:60`）但未发 `tools`。
+- SSE 流式路由模式已有：`companion.py:22` `_SSE_HEADERS` + `:43`（`StreamingResponse`）、`:54` 事件帧，SSE 行解析 `_parse_delta`（`llm_client.py:86`）。
+- 单轮服务参考实现：`companion_service.stream_answer` prompt -> stream -> persist（`app/services/companion_service.py:48`），含 `CancelledError` 中断持久化（`:70`）。
+- 持久化基座：`Conversation`/`Message`（`app/db/models.py`），`_persist` 写双消息模式（`companion_service.py:139`）。
+- 可作为 Action 的能力：知识检索 / 科室匹配（原 `vector_store` / `departments.match_departments` 已随重构移除，需重建，见 03）、text-to-sql（`todo/text-to-sql.md`）。
 - **无** Thought/Action/Observation 解析、无循环引擎、无步骤持久化。
 
 ## 目标
@@ -19,7 +19,7 @@
 
 ### 1. 两种实现路线（先 B 后 A）
 - [ ] 路线 A：原生 Function Calling -- `chat_stream` 透传 `tools`/`tool_choice`（经 `extra`），解析 tool_call delta
-- [ ] 路线 B（先落地）：纯文本 ReAct -- 用 prompt 约束输出格式 `Thought:/Action:/Observation:`，自写解析器；兼容本地小模型（Ollama qwen2.5，`config.py:64`）
+- [ ] 路线 B（先落地）：纯文本 ReAct -- 用 prompt 约束输出格式 `Thought:/Action:/Observation:`，自写解析器；兼容本地小模型（Ollama qwen2.5，`config.py:37`）
 
 ### 2. 输出解析器
 - [ ] `app/services/agent/react_parser.py`：从 LLM 流式/完整输出抽取 `Thought`、`Action`(name+args)、`Final Answer`
@@ -35,10 +35,10 @@
 
 ### 5. 持久化与中断恢复
 - [ ] `app/db/models.py` 增 `AgentStep`（conv_id、step_no、thought、action、observation、status、created_at）
-- [ ] 复用 `_persist` 双消息模式收尾（`chat_service.py:129`）；中断时落 checkpoint（对齐 `CancelledError` 处理 `chat_service.py:60`），恢复从最后完成步骤续跑
+- [ ] 复用 `_persist` 双消息模式收尾（`companion_service.py:139`）；中断时落 checkpoint（对齐 `CancelledError` 处理 `companion_service.py:70`），恢复从最后完成步骤续跑
 
 ### 6. 流式输出
-- [ ] 新增 SSE 事件类型：`thought` / `action` / `observation` / `delta` / `done`，沿用 `chat.py` SSE 模式与 `_parse_delta`
+- [ ] 新增 SSE 事件类型：`thought` / `action` / `observation` / `delta` / `done`，沿用 `companion.py` SSE 模式与 `_parse_delta`（`llm_client.py:86`）
 - [ ] 前端可实时展示推理链（参考 `apps/h5-app2` 逐字渲染）
 
 ### 7. 路由接入

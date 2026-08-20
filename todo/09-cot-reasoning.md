@@ -4,11 +4,11 @@
 
 ## 现状对齐（基于现有代码）
 
-- 现有四服务 SYSTEM_PROMPT 均为「直接答」指令，**无显式推理要求**：triage「请仅依据...回答」（`triage_service.py:38`）、science（`science_service.py:28`）、companion（`companion_service.py:27`）、chat（`chat_service.py:23`）。LLM 一次调用直出终答（`chat_service.py:56`）。
-- LLM 调用已可透传 `temperature` / `max_tokens` / `extra`（`llm_client.py:80` `chat_stream`，`extra` 透传位 `:99`），CoT 调温与采样参数可经此注入，无需改客户端。
-- triage 已有引用标注约束 `[1][2]`（`triage_service.py:44`）--CoT 推理链 + 引用可叠加为可审计证据链。
-- 检索增强已就绪：triage RAG（`triage_service.py:86-89` embed + query）、science 话题向量与相似度（`science_service.py:138` `_is_new_topic`、`:39` `_cosine_similarity`），CoT 步骤可引用检索片段作推理依据、相似度可复用为 self-consistency 答案聚类。
-- 持久化**只存终答**：`_persist` 双消息 user/assistant（`chat_service.py:129`、`triage_service.py:274`），不存推理过程，无法回放推理链。
+- 现有服务 SYSTEM_PROMPT 均为「直接答」指令，**无显式推理要求**：现仅 companion（`companion_service.py:27`）；chat/triage/science 已随重构移除。LLM 一次调用直出终答（`companion_service.py:66`）。
+- LLM 调用已可透传 `temperature` / `max_tokens` / `extra`（`llm_client.py:54` `chat_stream`，`extra` 透传位 `:60`），CoT 调温与采样参数可经此注入，无需改客户端。
+- 引用标注约束：原 triage `[1][2]` 标注已随重构移除，需随 03 RAG 重建。
+- 检索增强：原 triage RAG 与 science 话题向量已移除（见 03）；CoT 步骤引用检索片段需待 RAG 重建后叠加。
+- 持久化**只存终答**：`_persist` 双消息 user/assistant（`companion_service.py:139`），不存推理过程，无法回放推理链。
 - 已规划但未落地：07 ReAct 的 `react_parser.py` 解析 `Thought:`（`todo/07-react-agent.md:25`）；机器人 `AgentStep.thought` 字段（`docs/09-robot-dialog-flow.md:269`）--CoT 是其推理内核。
 - **无**：CoT prompt 模板、推理链解析/抽取、self-consistency 多采样投票、推理链持久化与回放、推理质量评测。
 
@@ -19,8 +19,8 @@
 ## 任务
 
 ### 1. CoT 提示模板
-- [ ] `app/services/agent/cot_prompt.py`：system prompt 注入「先逐步推理（包在 `<thought>...</thought>`），再给最终答案」；纯文本标记兼容本地小模型（`config.py:64` qwen2.5）
-- [ ] 四服务可选启用：triage/science/companion/chat 的 SYSTEM_PROMPT 叠加 CoT 段（对齐现有 prompt 风格 `triage_service.py:38`）
+- [ ] `app/services/agent/cot_prompt.py`：system prompt 注入「先逐步推理（包在 `<thought>...</thought>`），再给最终答案」；纯文本标记兼容本地小模型（`config.py:37` qwen2.5）
+- [ ] 服务可选启用：companion（及随 03 重建的 triage/science/chat）的 SYSTEM_PROMPT 叠加 CoT 段（对齐现有 prompt 风格 `companion_service.py:27`）
 - [ ] few-shot 示例库：医疗分诊 / 科普等场景的推理范例，提升小模型 CoT 稳定性
 
 ### 2. 推理链解析与分离
@@ -28,24 +28,24 @@
 - [ ] 容错：标记缺失 / 未闭合时回退为整段答案，记录解析失败（依赖 06）
 
 ### 3. self-consistency（自洽投票）
-- [ ] 对关键决策（如分诊选科）多次采样（temperature 抬高，经 `extra` 透传 `llm_client.py:99`），对结论投票取多数
-- [ ] 复用 science 相似度（`science_service.py:39` `_cosine_similarity`）做答案聚类 / 去重
+- [ ] 对关键决策（如分诊选科）多次采样（temperature 抬高，经 `extra` 透传 `llm_client.py:60`），对结论投票取多数
+- [ ] 复用 03 重建后的检索相似度（embedding 余弦）做答案聚类 / 去重
 - [ ] 成本控制：仅高风险 / 低置信场景触发，默认关闭（依赖 06 token 预算）
 
 ### 4. 流式输出
-- [ ] SSE 事件扩展：`thought`(推理链，可折叠) / `delta`(终答逐字) / `done`，沿用 `chat.py` SSE 与 `_parse_delta`（`llm_client.py:112`）
+- [ ] SSE 事件扩展：`thought`(推理链，可折叠) / `delta`(终答逐字) / `done`，沿用 `companion.py` SSE 与 `_parse_delta`（`llm_client.py:86`）
 - [ ] 前端可选择性展示推理链（参考 `apps/h5-app2` 逐字渲染 + 折叠面板）
 
 ### 5. 推理链持久化与回放
-- [ ] 扩展 `Message`（`models.py:43`）增 `thought` 字段，或复用 `AgentStep.thought`（`docs/09-robot-dialog-flow.md:269`），区别于只存终答的 `_persist`（`chat_service.py:129`）
+- [ ] 扩展 `Message`（`models.py:43`）增 `thought` 字段，或复用 `AgentStep.thought`（`docs/09-robot-dialog-flow.md:269`），区别于只存终答的 `_persist`（`companion_service.py:139`）
 - [ ] 历史回放带推理链，便于 badcase 复盘（依赖 06）
 
 ### 6. 抗幻觉与可审计
-- [ ] 推理链强制引用检索片段（叠加 triage `[1][2]` 引用 `triage_service.py:44`），无依据步骤标记
+- [ ] 推理链强制引用检索片段（随 03 重建叠加引用标注，对齐原 triage `[1][2]` 思路），无依据步骤标记
 - [ ] 推理与结论一致性校验：结论须由推理链支撑，不一致触发重试 / 降级
 
 ### 7. 配置
-- [ ] `app/core/config.py` 增 `COT_ENABLED` / `COT_SELF_CONSISTENCY_N` / `COT_SELF_CONSISTENCY_THRESHOLD` / `COT_EMIT_THOUGHT`（对齐现有 config 风格 `config.py:96`）
+- [ ] `app/core/config.py` 增 `COT_ENABLED` / `COT_SELF_CONSISTENCY_N` / `COT_SELF_CONSISTENCY_THRESHOLD` / `COT_EMIT_THOUGHT`（对齐现有 config 风格，如 `config.py:19-20` companion 配置段）
 
 ## 示例执行流
 

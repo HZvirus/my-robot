@@ -4,9 +4,10 @@
 
 ## 现状对齐（基于现有代码）
 
-- **短期记忆**：各服务 `_load_history` 取最近 N 条线性拼入（`config.py:20` `CHAT_MAX_HISTORY=10`、`config.py:85` `TRIAGE_MAX_HISTORY=6`、`config.py:23/26` companion/science=12）。无压缩，仅截断。
-- **遗忘雏形**：`science_service` 话题漂移检测 —— 加权话题质心 + 余弦相似度，低于阈值（`config.py:29` `SCIENCE_TOPIC_SIM_THRESHOLD=0.51`）即新开会话（`science_service.py:114` `_load_topic_vector`、`:138` `_is_new_topic`）。但仅 science 用，且是「切会话」而非「压缩记忆」。
-- **无长期记忆、无记忆抽取、无上下文压缩、无用户画像**（`User` 仅 id/token_hash/role，`models.py:17`）、无情绪理解、无个性化。
+- **短期记忆**：仅 `companion` 服务保留上下文 —— `_load_history` 取最近 `COMPANION_MAX_HISTORY=12`（`config.py:20`）条线性拼入（`companion_service.py:125`）。chat/triage/science 已随重构移除；无压缩，仅截断。
+- **遗忘雏形**：science 话题漂移检测（加权话题质心 + 余弦相似度）已随重构移除，当前无任何遗忘机制。
+- **无长期记忆、无记忆抽取、无上下文压缩、无用户画像**（`User` 仅 id/token_hash/role，`db/models.py:17`）、无情绪理解、无个性化。
+- 注意：任务 1/依赖复用的 `embedding.py` / `vector_store.py` 已随重构移除，检索式记忆召回需重建（见 03）。
 
 ## 目标
 
@@ -18,7 +19,7 @@
 - [ ] 新建 `app/services/memory/` 包：`memory_store.py`
 - [ ] 长期记忆表：`app/db/models.py` 增加 `Memory`（user_id、kind=episode/summary、content、embedding、importance、last_used、created_at）
 - [ ] 记忆抽取：每轮后异步抽取关键事实/偏好写入长期记忆（LLM 抽取）
-- [ ] 检索式召回：用 embedding 召回相关长期记忆注入上下文（复用 `embedding.py`、`vector_store.py`）
+- [ ] 检索式召回：用 embedding 召回相关长期记忆注入上下文（随 03 重建 `embedding.py` / `vector_store.py` 后复用）
 
 ### 2. 上下文压缩
 - [ ] `context_compressor.py`：超阈值时对早期历史做 LLM 摘要压缩，替代当前粗暴截断
@@ -40,4 +41,4 @@
 
 ## 依赖
 
-- 复用 `embedding.py` / `vector_store.py`；与 05（上下文剪裁）、06（trace 记录记忆操作）联动。
+- 随 03 重建后复用 `embedding.py` / `vector_store.py`；与 05（上下文剪裁）、06（trace 记录记忆操作）联动。

@@ -32,7 +32,7 @@
 - [ ] 新建路由 `app/api/routes/text_to_sql.py`，`POST /api/text-to-sql/query`
   - [ ] 复用 `app/api/deps.py` 鉴权与角色（参考 RBAC，仅允许有权限角色）
   - [ ] 失败兜底：翻译失败 / 执行报错 / 超时，返回结构化错误
-- [ ] 在 `app/api/routes/__init__.py` / `app/main.py` 注册路由
+- [ ] 在 `app/main.py` 注册路由（`include_router`，对齐 `main.py:37-39`；`app/api/routes/__init__.py` 当前为空）
 
 ### 3. 自然语言摘要
 - [ ] 执行结果回喂 LLM，生成中文摘要（表格 → 一两句话）

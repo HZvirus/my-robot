@@ -4,9 +4,12 @@
 
 ## 现状对齐（基于现有代码）
 
-- 当前**无真正 Agent**。`chat/companion/science/triage` 四服务均为「单轮 RAG/聊天」：`stream_answer` 做 retrieve → prompt → stream → persist，一次 LLM 调用即结束（`app/services/triage_service.py:66`、`app/services/chat_service.py:38`）。
-- 多轮状态管理已有基础：会话与消息持久化在 `app/db/models.py`（`Conversation`/`Message`），各服务 `_load_history` 取最近 N 条拼入 messages（`chat_service.py:115`、`triage_service.py:261`）。但仅线性历史拼接，无状态机、无中间步骤持久化。
-- **无 Planning、无多步推理、无 Function Calling**：`llm_client.chat_stream` 仅 `/v1/chat/completions` 文本流式（`app/services/llm_client.py:80`），未发送 `tools` 参数（`extra` 已预留透传位 `llm_client.py:99`，但无人使用）。
+> 以下路径相对 `apps/ai-service/`（重构后整体迁入 pnpm/turbo monorepo，Python 后端在 `apps/ai-service/app/`）。
+
+- **无真正 Agent**。`chat/triage/science` 服务已随重构移除，当前仅剩 `companion` 一个「单轮聊天」服务：`stream_answer` 做 prompt → stream → persist，一次 LLM 调用即结束（`app/services/companion_service.py:48`）。`app/main.py:37-39` 仅挂载 `auth/companion/smart_tts` 三个 router；残留测试 `tests/test_chat.py`、`tests/test_science.py`、`tests/test_triage.py`、`tests/test_tts.py` 仍 import 已删除模块，pytest collect 报 5 个 error。
+- 多轮状态管理已有基础：会话与消息持久化在 `app/db/models.py`（`Conversation`/`Message`，另有设备 `User`），`companion_service` 的 `_ensure_conversation`（`companion_service.py:106`）/ `_load_history`（`companion_service.py:125`）取最近 N 条拼入 messages。但仅线性历史拼接，无状态机、无中间步骤持久化。
+- **无 Planning、无多步推理、无 Function Calling**：`llm_client.chat_stream` 仅 `/v1/chat/completions` 文本流式（`app/services/llm_client.py:54`），未发送 `tools` 参数（`extra` 已预留透传位 `llm_client.py:60`，全仓无人使用）。
+- 新结构：`app/api/routes/`（auth/companion/smart_tts）、`app/core/`（config/logger/rbac 权限域）、`app/models/`（Pydantic schema）、`app/db/`（`models.py` + `session.py`）。
 
 ## 目标
 
@@ -30,7 +33,7 @@
 - [ ] 工具契约与错误语义（依赖 04 工具生态）
 
 ### 4. 多轮状态管理收敛
-- [ ] 抽象 `ConversationContext`（history + agent state + working memory），收玫 chat/triage/science/companion 四处重复的 `_ensure_conversation` / `_load_history` / `_persist`
+- [ ] 抽象 `ConversationContext`（history + agent state + working memory），收敛 `companion_service` 中 `_ensure_conversation` / `_load_history` / `_persist`（`companion_service.py:106/125/139`），供后续 chat/triage/science 等服务复用
 - [ ] 状态快照与恢复（为 05 中断恢复铺垫）
 
 ## 依赖
