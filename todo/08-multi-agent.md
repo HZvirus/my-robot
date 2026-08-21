@@ -27,7 +27,7 @@
 ### 2. Supervisor / Router（调度者）
 - [ ] `app/services/agent/supervisor.py`：统一入口 `stream_orchestrate`，先路由/规划再分发
 - [ ] 路由策略 A（先落地）：规则路由（关键词 + embedding 相似度，随 03 重建话题向量思路）
-- [ ] 路由策略 B：LLM 路由（让 LLM 输出目标 Agent 名，纯文本解析以兼容本地小模型，`config.py:37` qwen2.5）
+- [ ] 路由策略 B：LLM 路由（让 LLM 输出目标 Agent 名，纯文本解析以兼容本地小模型，`config.py:37` qwen3:14b）
 - [ ] handoff：子 Agent 可声明转交（如 triage 判定非医疗问题 -> handoff 到 science/companion），上下文随移交传递
 
 ### 3. 共享状态与消息传递

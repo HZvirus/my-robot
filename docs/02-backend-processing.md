@@ -64,7 +64,7 @@ async def triage_chat(req: TriageRequest) -> StreamingResponse:
 统一模式：`[system 提示词] + 最近 N 条历史 + [当前用户消息]`。
 
 - 历史限制：`msgs.extend(history[-SETTING_MAX_HISTORY:])`。
-- 导诊额外把检索片段以 `[1]`、`[2]`… 编号注入 system 提示词的「【医院资料】」区块（`_format_context`），并做**上下文预算**：累计不超过 `CONTEXT_BUDGET = 4000` 字符，超长片段截断，避免 7B 模型上下文溢出。
+- 导诊额外把检索片段以 `[1]`、`[2]`… 编号注入 system 提示词的「【医院资料】」区块（`_format_context`），并做**上下文预算**：累计不超过 `CONTEXT_BUDGET = 4000` 字符，超长片段截断，避免 14B 模型上下文溢出。
 
 ## 4. 流式累积与落库
 

@@ -19,7 +19,7 @@
 
 ### 1. 两种实现路线（先 B 后 A）
 - [ ] 路线 A：原生 Function Calling -- `chat_stream` 透传 `tools`/`tool_choice`（经 `extra`），解析 tool_call delta
-- [ ] 路线 B（先落地）：纯文本 ReAct -- 用 prompt 约束输出格式 `Thought:/Action:/Observation:`，自写解析器；兼容本地小模型（Ollama qwen2.5，`config.py:37`）
+- [ ] 路线 B（先落地）：纯文本 ReAct -- 用 prompt 约束输出格式 `Thought:/Action:/Observation:`，自写解析器；兼容本地小模型（Ollama qwen3:14b，`config.py:37`）
 
 ### 2. 输出解析器
 - [ ] `app/services/agent/react_parser.py`：从 LLM 流式/完整输出抽取 `Thought`、`Action`(name+args)、`Final Answer`

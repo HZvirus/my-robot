@@ -39,7 +39,7 @@ API docs available at http://localhost:8000/docs
 
 ## 通用对话（SSE 流式 + 上下文）
 
-基于本地 Ollama（`qwen2.5:7b`，同智能导诊）的流式对话接口，会话自动持久化于 SQLite。
+基于本地 Ollama（`qwen3:14b`，同智能导诊）的流式对话接口，会话自动持久化于 SQLite。
 
 ### 接口
 
@@ -51,7 +51,7 @@ API docs available at http://localhost:8000/docs
 
 ## 健康陪伴（SSE 流式 + 上下文）
 
-面向 C 端用户的健康陪伴聊天，以「小安」人设提供健康科普、情绪陪伴与生活方式建议（不诊断、不开药，紧急症状提醒就医）。同样基于本地 Ollama（`qwen2.5:7b`），会话自动持久化于 SQLite。
+面向 C 端用户的健康陪伴聊天，以「小安」人设提供健康科普、情绪陪伴与生活方式建议（不诊断、不开药，紧急症状提醒就医）。同样基于本地 Ollama（`qwen3:14b`），会话自动持久化于 SQLite。
 
 ### 接口
 
@@ -63,7 +63,7 @@ API docs available at http://localhost:8000/docs
 
 ## 科普百科（SSE 流式 + 上下文）
 
-以「小科」人设提供通俗易懂的科普讲解（天文、地理、生物、物理等，纯文本、无语音）。同样基于本地 Ollama（`qwen2.5:7b`），会话自动持久化于 SQLite。
+以「小科」人设提供通俗易懂的科普讲解（天文、地理、生物、物理等，纯文本、无语音）。同样基于本地 Ollama（`qwen3:14b`），会话自动持久化于 SQLite。
 
 ### 接口
 
@@ -75,13 +75,13 @@ API docs available at http://localhost:8000/docs
 
 ## 智能导诊（RAG over Ollama）
 
-基于本地 Ollama（`qwen2.5:7b` 生成 + `bge-m3` 嵌入）与 ChromaDB 向量库的知识库问答接口，独立于现有 `/api/chat`。
+基于本地 Ollama（`qwen3:14b` 生成 + `bge-m3` 嵌入）与 ChromaDB 向量库的知识库问答接口，独立于现有 `/api/chat`。
 
 ### 前置条件
 
 - `ollama serve` 已运行，且已 pull 模型：
   ```bash
-  ollama pull qwen2.5:7b
+  ollama pull qwen3:14b
   ollama pull bge-m3
   ```
 
@@ -120,8 +120,8 @@ ingest-kb
 
 | 后端 | LLM_BASE_URL | LLM_MODEL | 说明 |
 |------|--------------|-----------|------|
-| 本地 Ollama | `http://localhost:11434` | `qwen2.5:7b` | 开发默认，`LLM_*` 留空 |
-| 自托管 vLLM | `http://<host>:8000` | `Qwen/Qwen2.5-7B-Instruct` | 生产自建，换 Ollama 为 vLLM 提升吞吐 |
+| 本地 Ollama | `http://localhost:11434` | `qwen3:14b` | 开发默认，`LLM_*` 留空 |
+| 自托管 vLLM | `http://<host>:8000` | `Qwen/Qwen3-14B` | 生产自建，换 Ollama 为 vLLM 提升吞吐 |
 | 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` | 生产调通义 API，填 `LLM_API_KEY` |
 
 > 切换嵌入模型（如本地 `bge-m3` → 通义 `text-embedding-v3`）后，须同步 `EMBEDDING_DIM` 并清空 `data/chroma` 重新执行 `ingest-kb`。

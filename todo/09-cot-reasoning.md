@@ -19,7 +19,7 @@
 ## 任务
 
 ### 1. CoT 提示模板
-- [ ] `app/services/agent/cot_prompt.py`：system prompt 注入「先逐步推理（包在 `<thought>...</thought>`），再给最终答案」；纯文本标记兼容本地小模型（`config.py:37` qwen2.5）
+- [ ] `app/services/agent/cot_prompt.py`：system prompt 注入「先逐步推理（包在 `<thought>...</thought>`），再给最终答案」；纯文本标记兼容本地小模型（`config.py:37` qwen3:14b）
 - [ ] 服务可选启用：companion（及随 03 重建的 triage/science/chat）的 SYSTEM_PROMPT 叠加 CoT 段（对齐现有 prompt 风格 `companion_service.py:27`）
 - [ ] few-shot 示例库：医疗分诊 / 科普等场景的推理范例，提升小模型 CoT 稳定性
 

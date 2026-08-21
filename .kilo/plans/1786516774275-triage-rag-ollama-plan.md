@@ -4,7 +4,7 @@
 在 `apps/ai-service` 新增基于 RAG 的智能导诊对话能力：本地 Ollama 提供 LLM + 向量嵌入，医院自有知识库 (md/txt) 入库 ChromaDB，对外暴露 SSE 流式接口，`apps/h5-app1` 调用并展示。
 
 ## 已确认决策
-- LLM: `qwen2.5:7b`；Embedding: `bge-m3`（1024 维，可配置）。
+- LLM: `qwen3:14b`；Embedding: `bge-m3`（1024 维，可配置）。
 - 向量库: **ChromaDB**（本地持久化 + 元数据过滤）。
 - 知识库来源: `knowledge/` 目录下 md/txt 文件 + 一次性入库脚本。
 - 响应: **SSE 流式**（POST + fetch ReadableStream，前端非 EventSource）。
@@ -17,7 +17,7 @@
 - Base: `http://localhost:11434`，走 OpenAI 兼容接口：
   - 嵌入: `POST {base}/v1/embeddings`，body `{model, input}`，无需真实 key（发 `Bearer ollama` 占位）。
   - 对话流: `POST {base}/v1/chat/completions`，`stream: true`，按 SSE `data: {choices:[{delta:{content}}]}` 解析，末尾 `data: [DONE]`。
-- 前置条件: `ollama serve` 已运行且 `qwen2.5:7b`、`bge-m3` 已 pull（已确认存在）。
+- 前置条件: `ollama serve` 已运行且 `qwen3:14b`、`bge-m3` 已 pull（已确认存在）。
 
 ## 数据流 (单轮)
 1. 前端 POST `/api/triage/chat` `{message, conversation_id?}`，响应 `text/event-stream`。
@@ -36,7 +36,7 @@
 新增字段：
 ```
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_LLM_MODEL=qwen2.5:7b
+OLLAMA_LLM_MODEL=qwen3:14b
 OLLAMA_EMBED_MODEL=bge-m3
 EMBEDDING_DIM=1024
 CHROMA_PERSIST_DIR=./data/chroma
@@ -142,7 +142,7 @@ export interface TriageRequest { message: string; conversationId?: string }
 - **ChromaDB Windows 安装**：依赖 onnxruntime 等，可能慢/失败。回退方案：改用 `faiss-cpu + numpy`，向量与元数据存 SQLite（`vector_store.py` 接口不变，换实现）。
 - **嵌入维度不匹配**：`bge-m3` 为 1024；若换模型须同步 `EMBEDDING_DIM` 并清空 `data/chroma` 重新入库。
 - **SSE + POST**：浏览器 `EventSource` 不支持 POST，故前端用 `fetch` 流式读取（已在方案中）。
-- **上下文超长**：`qwen2.5:7b` 上下文有限；限制 `TRIAGE_MAX_HISTORY` 与检索片段长度，拼接前裁剪。
+- **上下文超长**：`qwen3:14b` 上下文有限；限制 `TRIAGE_MAX_HISTORY` 与检索片段长度，拼接前裁剪。
 - **流式中途断开**：捕获取消异常，落库已生成部分并标记 `interrupted`。
 - **真实资料格式**：当前仅支持 md/txt；若后续需要 PDF/Word，再引入 `pypdf`/`python-docx` 并扩展 `kb_loader`（明确为后续范围）。
 

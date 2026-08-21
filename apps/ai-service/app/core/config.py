@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: float = 0.0
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_LLM_MODEL: str = "qwen2.5:7b"
+    OLLAMA_LLM_MODEL: str = "qwen3:14b"
     OLLAMA_TIMEOUT: float = 120.0
 
     # --- RBAC / knowledge-base scopes ---

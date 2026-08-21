@@ -6,14 +6,14 @@
 
 | 用途 | 模型 | 说明 |
 | --- | --- | --- |
-| 对话生成 | `qwen2.5:7b`（`OLLAMA_LLM_MODEL`） | 中文质量较好，上下文有限 |
+| 对话生成 | `qwen3:14b`（`OLLAMA_LLM_MODEL`） | 中文质量较好，上下文有限 |
 | 文本嵌入 | `bge-m3`（`OLLAMA_EMBED_MODEL`） | 输出 1024 维向量（`EMBEDDING_DIM`） |
 
 ## 2. 前置条件
 
 ```bash
 ollama serve                    # 启动本地服务（默认 11434）
-ollama pull qwen2.5:7b
+ollama pull qwen3:14b
 ollama pull bge-m3
 ```
 
@@ -81,7 +81,7 @@ python -m scripts.ingest_kb      # 或 install 后直接 ingest-kb
 
 ## 6. 上下文预算
 
-`qwen2.5:7b` 上下文有限，导诊做了两层限制：
+`qwen3:14b` 上下文有限，导诊做了两层限制：
 
 - 历史只取最近 `TRIAGE_MAX_HISTORY = 6` 条；
 - 检索片段注入 system 时累计不超过 `CONTEXT_BUDGET = 4000` 字符，超出截断（`triage_service._format_context`）。
