@@ -28,3 +28,30 @@ export interface CompanionConversation {
   createdAt: string
   preview: string
 }
+
+export interface AgentRunRequest {
+  message: string
+  conversationId?: string
+}
+
+export interface AgentStep {
+  stepNo: number
+  thought: string
+  action: string
+  observation: string
+  status: string
+}
+
+export interface AgentRunResponse {
+  conversationId: string
+  answer: string
+  steps: AgentStep[]
+}
+
+export interface AgentChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  steps: AgentStep[]
+  createdAt: string
+}

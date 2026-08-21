@@ -11,8 +11,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { forwardHttp } from './upstream';
 
-const CONNECT_TIMEOUT_MS = 5000;
-
 @Controller()
 export class ProxyController {
   private readonly logger = new Logger('Proxy');
@@ -51,7 +49,7 @@ export class ProxyController {
         path: req.url,
         headers,
         bodyStream,
-        connectTimeoutMs: CONNECT_TIMEOUT_MS,
+        connectTimeoutMs: this.config.AI_SERVICE_TIMEOUT,
         requestId,
       });
 

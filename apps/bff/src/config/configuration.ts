@@ -8,6 +8,11 @@ const EnvSchema = z.object({
     .url()
     .default('http://localhost:8000')
     .transform((s) => s.replace(/\/+$/, '')),
+  AI_SERVICE_TIMEOUT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60000),
   LOG_LEVEL: z
     .enum(['error', 'warn', 'info', 'debug', 'verbose'])
     .default('info'),

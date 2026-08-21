@@ -7,6 +7,11 @@ const router = createRouter({
       path: '/',
       name: 'companion-fast',
       component: () => import('@/views/CompanionFastView.vue')
+    },
+    {
+      path: '/agent',
+      name: 'agent',
+      component: () => import('@/views/AgentView.vue')
     }
   ]
 })

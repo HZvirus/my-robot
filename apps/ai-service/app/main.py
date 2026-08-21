@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, companion, smart_tts
+from app.api.routes import agent,auth, companion, smart_tts
 from app.core.config import settings
 from app.core.logger import setup_logging
-from app.db.models import Conversation, Message, User  # noqa: F401 - register ORM models
+from app.db.models import AgentStep,Conversation, Message, User  # noqa: F401 - register ORM models
 from app.db.session import Base, engine
 
 
@@ -36,6 +36,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(companion.router, prefix="/api", tags=["companion"])
+app.include_router(agent.router, prefix="/api", tags=["agent"])
 app.include_router(smart_tts.router, prefix="/api", tags=["smart-tts"])
 
 
