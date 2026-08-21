@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     OLLAMA_LLM_MODEL: str = "qwen3:14b"
     OLLAMA_TIMEOUT: float = 120.0
 
+    # --- Web search (DuckDuckGo html, no API key) ---
+    WEB_SEARCH_TIMEOUT: float = 8.0
+    WEB_SEARCH_MAX_RESULTS: int = 5
+
     # --- RBAC / knowledge-base scopes ---
     # HMAC secret used to sign elevated role tokens. When empty, elevated
     # roles (nurse/doctor/admin) cannot be registered; only the default

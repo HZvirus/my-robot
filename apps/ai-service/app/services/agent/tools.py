@@ -1,12 +1,13 @@
-"""Agent 工具：工具注册与内置工具（时间、计算器）。
+"""Agent 工具：工具注册与内置工具（时间、计算器、网页搜索）。
 
 本模块实现 agent 可调用的"工具"机制：
 
-- Tool           单个工具的定义（名字 + 描述 + 参数 Schema + 可执行函数）
-- get_current_time  内置工具：取当前 UTC 时间
-- calculate         内置工具：纯算术表达式求值（用 ast 解析，安全，不用 eval）
-- ToolRegistry      工具注册表：管理工具集合，向 LLM 提供 JSON Schema、
-                    按名字分发调用
+- Tool               单个工具的定义（名字 + 描述 + 参数 Schema + 可执行函数）
+- get_current_time   内置工具：取当前 UTC 时间
+- calculate          内置工具：纯算术表达式求值（用 ast 解析，安全，不用 eval）
+- web_search         内置工具：DuckDuckGo 网页搜索（免 Key）
+- ToolRegistry       工具注册表：管理工具集合，向 LLM 提供 JSON Schema、
+                     按名字分发调用
 
 核心价值：
 - LLM 通过 `schema()` 知道有哪些工具、参数长什么样；
@@ -17,9 +18,15 @@ from __future__ import annotations
 
 import ast
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable
+from html.parser import HTMLParser
+from urllib import parse as urlparse
+
+import httpx
+
+from app.core.config import settings
 
 
 @dataclass
@@ -116,6 +123,122 @@ def calculate(expression: str) -> str:
         return json.dumps({"error": str(exc)}, ensure_ascii=False)
 
 
+class _DDGHTMLParser(HTMLParser):
+    """DuckDuckGo HTML 结果页解析器：提取 标题/真实URL/摘要。
+
+    只关注 `<a class="result__a">`（标题链接）与 `<a class="result__snippet">`
+    （摘要链接）两种节点，两者配对出现即构成一条结果。
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.results: list[dict[str, str]] = []
+        self._mode: str | None = None   # "title" | "snippet" | None
+        self._title: str | None = None
+        self._snippet: str | None = None
+        self._href: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        attr = dict(attrs)
+        classes = (attr.get("class") or "").split()
+        if "result__a" in classes:
+            self._mode, self._title, self._href = "title", "", attr.get("href") or ""
+        elif "result__snippet" in classes:
+            self._mode, self._snippet = "snippet", ""
+
+    def handle_data(self, data: str) -> None:
+        if self._mode == "title" and self._title is not None:
+            self._title += data
+        elif self._mode == "snippet" and self._snippet is not None:
+            self._snippet += data
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a":
+            return
+        if self._mode == "title" and self._title is not None:
+            self._title = " ".join(self._title.split())
+            self._mode = None
+        elif self._mode == "snippet" and self._snippet is not None:
+            self._snippet = " ".join(self._snippet.split())
+            self._mode = None
+            self.results.append({
+                "title": self._title or "",
+                "url": _real_url(self._href),
+                "snippet": self._snippet or "",
+            })
+            self._title = self._snippet = None
+            self._href = ""
+
+
+def _real_url(href: str) -> str:
+    """把 DuckDuckGo 的 `/l/?uddg=...` 跳转链接还原为真实 URL。
+
+    示例：
+    >>> _real_url("//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage%3Fa%3D1")
+    'https://example.com/page?a=1'
+    >>> _real_url("https://example.com/plain")
+    'https://example.com/plain'
+    """
+    if "uddg=" not in href:
+        return href
+    qs = urlparse.urlsplit(href).query
+    return urlparse.parse_qs(qs).get("uddg", [href])[0]
+
+
+_SEARCH_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Referer": "https://duckduckgo.com/",
+}
+
+
+def web_search(query: str, max_results: int = settings.WEB_SEARCH_MAX_RESULTS) -> str:
+    """DuckDuckGo 网页搜索（免 Key），返回 JSON 格式的结果列表。
+
+    - query       搜索关键词
+    - max_results 最多返回多少条结果
+
+    输出 JSON 结构：{"query": ..., "results": [{"title", "url", "snippet"}, ...]}
+    - 无结果时 results 为空数组
+    - 网络/解析失败时返回 {"error": ...}
+    - 自动过滤广告条目（DDG 广告链接带 ad_domain/ad_provider 参数）
+
+    注意：
+    - 这是一个网络方法，需要外网可达，无法离线 doctest；
+      解析器与 URL 还原是纯函数，可离线测试（见 _DDGHTMLParser / _real_url）。
+    - html 端点对裸 User-Agent 有反爬（返回 202 挑战页），必须携带完整浏览器头。
+    """
+    try:
+        with httpx.Client(
+            timeout=settings.WEB_SEARCH_TIMEOUT, follow_redirects=True
+        ) as client:
+            resp = client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers=_SEARCH_HEADERS,
+            )
+            resp.raise_for_status()
+    except Exception as exc:  # 网络不可达 / 超时 / HTTP 错误 / 反爬挑战
+        return json.dumps({"error": f"search failed: {exc}"}, ensure_ascii=False)
+
+    parser = _DDGHTMLParser()
+    parser.feed(resp.text)
+    results = [
+        r for r in parser.results
+        if "ad_domain=" not in r["url"] and "ad_provider=" not in r["url"]
+    ]
+    return json.dumps(
+        {"query": query, "results": results[:max_results]},
+        ensure_ascii=False,
+    )
+
+
 _BUILTIN_TOOLS: list[Tool] = [
     Tool(
         name="get_current_time",
@@ -134,6 +257,24 @@ _BUILTIN_TOOLS: list[Tool] = [
             "required": ["expression"],
         },
         func=calculate,
+    ),
+    Tool(
+        name="web_search",
+        description=(
+            "通过 DuckDuckGo 搜索网页。当用户需要实时/最新资讯或知识库之外的外部资料时调用。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索关键词,例如 '2026 年诺贝尔生理学奖 获奖者'",
+                },
+                "max_results": {"type": "integer", "description": "最多返回多少条结果(默认 5)"}
+            },
+            "required": ["query"],
+        },
+        func=web_search,
     ),
 ]
 
@@ -156,7 +297,7 @@ class ToolRegistry:
 
         示例：
         >>> [s["function"]["name"] for s in ToolRegistry().schema()]
-        ['get_current_time', 'calculate']
+        ['get_current_time', 'calculate', 'web_search']
         """
         return [
             {
@@ -175,7 +316,7 @@ class ToolRegistry:
 
         示例：
         >>> ToolRegistry().name()
-        ['get_current_time', 'calculate']
+        ['get_current_time', 'calculate', 'web_search']
         """
         return list(self._tools)
 

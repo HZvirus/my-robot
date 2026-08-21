@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.services.agent.planner import build_message
@@ -26,7 +27,6 @@ from app.services.agent.state import (
     StepRecord,
     parse_assistant_message,
 )
-
 from app.services.agent.tools import ToolRegistry, default_registry
 from app.services.llm_client import OpenAICompatClient
 
@@ -105,7 +105,7 @@ class AgentRunner:
 
             # 5) 请求了工具 => 逐个执行，结果回填历史并记录足迹
             for tc in reply.tool_calls:
-                observation = self._tools.invoke(tc.name, tc.arguments)
+                observation = await asyncio.to_thread(self._tools.invoke, tc.name, tc.arguments)
                 state.ass_tool_result(tc.id, observation)
                 state.steps.append(
                     StepRecord(

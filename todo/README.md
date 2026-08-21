@@ -18,6 +18,7 @@
 - [08-multi-agent.md](./08-multi-agent.md) -- 多 Agent 协作深度落地（05 子项）：supervisor/router 统一入口、handoff 移交、并行/串行编排、共享上下文与防循环。
 - [09-cot-reasoning.md](./09-cot-reasoning.md) -- 思维链（CoT）深度落地（01 子项）：显式逐步推理、推理链解析与持久化、self-consistency 投票、抗幻觉可审计。
 - [10-dialog-fsm.md](./10-dialog-fsm.md) -- 对话状态机深度落地（01 子项）：FSM 引擎、状态/转移/守卫、状态快照中断恢复、跨阶段记忆，承载 docs/09 导诊全流程。
+- [11-agent-review-fixes.md](./11-agent-review-fixes.md) -- 现有 ReAct Agent 实现（`app/services/agent/`）代码走查修复清单：上下文过滤/竞态/脱管 ORM、主循环异常兜底、工具注册扩展、注入通道、测试补齐。
 
 ## 依赖关系
 
